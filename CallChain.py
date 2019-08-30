@@ -5,7 +5,7 @@
 
 import os
 import sys
-import graphviz
+from utils import graphviz
 
 from ghidra.util.graph import DirectedGraph, Vertex, Edge
 from ghidra.graph.viewer import GraphComponent
