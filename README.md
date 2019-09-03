@@ -33,6 +33,15 @@ Rename saved stack variables for easier tracking. Only valid in MIPS.
 
 ![Rename stack variables](./img/rename_variables.png)
 
+# MIPS ROP Gadget Finder
+Find ROP gadgets in MIPS disassembly. Currently in development, these are the 
+"working" pieces so far.
+## System Gadgets
+Find gadgets suitable for calling system with user controlled arguments.
+
+![System Gadgets](./img/system_gadget.png)
+
+
 # Coming Soon
 In order, probably, of implementation. They may not be written if I get to them
 and they don't make sense to implement.
