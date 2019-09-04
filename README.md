@@ -33,9 +33,33 @@ Rename saved stack variables for easier tracking. Only valid in MIPS.
 
 ![Rename stack variables](./img/rename_variables.png)
 
-# MIPS ROP Gadget Finder
+# MIPS ROP Gadget Finder (Work in Progress)
 Find ROP gadgets in MIPS disassembly. Currently in development, these are the 
-"working" pieces so far.
+"working" pieces so far. Sorry if functionality changes greatly.
+## Find
+Find gadgets that contain custom MIPS instructions. Regular expressions are 
+supported. To search for a move to a0 from anything, simply search for 
+"`move a0,.*`".
+
+![Find Dialog Box](./img/find_dialog.png)
+
+![Find Result](./img/find.png)
+
+## Indirect Return
+Find indirect return gadgets. Call t9 and then return to ra.
+
+![Indirect Return](./img/iret.png)
+
+## Li a0
+Find gadgets that load a small value into a0. Useful for calling sleep.
+
+![Li a0](./img/lia0.png)
+
+## Stack Finder
+Find gadgets that place a stack address in a register.
+
+![Stack Finders](./img/stack_finder.png)
+
 ## System Gadgets
 Find gadgets suitable for calling system with user controlled arguments.
 

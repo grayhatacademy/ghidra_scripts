@@ -1,7 +1,8 @@
+import re
 from ghidra.program.flatapi import FlatProgramAPI
 
 
-format_string = '| {:12} | {:30} | {:30} |'
+format_string = '| {:12} | {:12} | {:30} | {:12} | {:30} |'
 
 
 class ControllableCall(object):
@@ -23,9 +24,17 @@ class RopGadget(object):
         self.jump = jump
 
     def __str__(self):
-        return format_string.format(self.action.getAddress(),
+
+        control_addr = self.jump.control_instruction.getAddress()
+        action_addr = self.action.getAddress()
+
+        start = self.jump.control_instruction if control_addr < action_addr else self.action
+
+        return format_string.format(start.getAddress(),
+                                    self.action.getAddress(),
                                     self.action,
-                                    self.jump)
+                                    self.jump.call.getAddress(),
+                                    self.jump.control_jump())
 
 
 class RopGadgets(object):
@@ -36,20 +45,23 @@ class RopGadgets(object):
         self.gadgets.append(gadget)
 
     def pretty_print(self):
-        line_len = len(str(self.gadgets[0]))
-        print '-' * line_len
-        print format_string.format('Address', 'Action', 'Control Jump')
-        print '-' * line_len
-        for gadget in self.gadgets:
-            print gadget
-        print '-' * line_len
+        if len(self.gadgets):
+            line_len = len(str(self.gadgets[0]))
+            print '-' * line_len
+            print format_string.format('Gadget Start', 'Action Addr', 'Action', 'Jump Addr', 'Jump')
+            print '-' * line_len
+            for gadget in self.gadgets:
+                print gadget
+            print '-' * line_len
+        print 'Found {} matching gadgets.\n'.format(len(self.gadgets))
 
 
 class MipsInstruction(object):
-    def __init__(self, mnem, op1, op2):
+    def __init__(self, mnem, op1=None, op2=None, op3=None):
         self.mnem = mnem
         self.op1 = op1
         self.op2 = op2
+        self.op3 = op3
 
 
 class MipsRop(object):
@@ -57,6 +69,7 @@ class MipsRop(object):
         self._flat_api = FlatProgramAPI(program)
         self._currentProgram = program
         self.controllable_calls = []
+        self.controllable_terminating_calls = []
 
     def find_controllable_calls(self):
         """
@@ -69,103 +82,132 @@ class MipsRop(object):
 
         for ins in instructions:
             flow_type = ins.getFlowType()
-            if flow_type.isCall() or flow_type.isTerminal():
+
+            if flow_type.isCall() or flow_type.isTerminal() or \
+                    (flow_type.isJump() and flow_type.isComputed()):
                 current_instruction = self._flat_api.getInstructionAt(
                     ins.getAddress())
                 controllable = self._find_controllable_call(
                     current_instruction)
+
                 if controllable:
-                    self.controllable_calls.append(controllable)
+                    if flow_type.isCall() and not flow_type.isTerminal():
+                        self.controllable_calls.append(controllable)
+                    elif flow_type.isTerminal() or \
+                            (flow_type.isJump() and flow_type.isComputed()):
+                        self.controllable_terminating_calls.append(
+                            controllable)
 
     def _find_controllable_call(self, call_instruction):
+        t9_move = MipsInstruction('move', 't9', '[sva][012345678]')
+        ra_load = MipsInstruction('.*lw', 'ra')
+
+        call_from = call_instruction.getOpObjects(0)[0]
+
         controllable = None
         fall_from = call_instruction.getFallFrom()
         if fall_from is None:
-            return False
-        previous_ins = self._flat_api.getInstructionAt(fall_from)
+            previous_ins = call_instruction.getPrevious()
+        else:
+            previous_ins = self._flat_api.getInstructionAt(fall_from)
+
         while previous_ins:
             if 'nop' in str(previous_ins):
                 previous_ins = previous_ins.getPrevious()
+
             first_op = previous_ins.getOpObjects(0)
             if len(first_op):
                 dest_reg = first_op[0]
-                if str(dest_reg) == 't9' or str(dest_reg) == 'ra':
-                    second_op = previous_ins.getOpObjects(1)
-                    for operand in second_op:
-                        if 's' in str(operand):
-                            return ControllableCall(call_instruction, previous_ins)
+                if str(dest_reg) == str(call_from):
+                    if instruction_matches(previous_ins,
+                                           [t9_move, ra_load]):
+                        return ControllableCall(call_instruction, previous_ins)
                     return None
-                fall_from = previous_ins.getFallFrom()
-                if fall_from is None:
-                    return None
+
+            fall_from = previous_ins.getFallFrom()
+            if fall_from is None:
+                previous_ins = previous_ins.getPrevious()
+            else:
                 previous_ins = self._flat_api.getInstructionAt(fall_from)
 
-            else:
-                return None
-
-    def find_system_rops(self):
-        """
-        Find controllable calls that can be used to jump to system.
-        """
+    def find_instructions(self, instructions, preserve_register=None,
+                          controllable_calls=True, terminating_calls=True):
         gadgets = RopGadgets()
-        for jump in self.controllable_calls:
-            system_rop = self._find_system_rop(jump)
-            if system_rop:
-                gadgets.append(RopGadget(system_rop, jump.control_jump()))
+
+        search_calls = []
+        if controllable_calls:
+            search_calls.extend(self.controllable_calls)
+        if terminating_calls:
+            search_calls.extend(self.controllable_terminating_calls)
+
+        for call in search_calls:
+            rop = self._find_rop(call, instructions, preserve_register)
+            if rop:
+                gadgets.append(RopGadget(rop, call))
 
         return gadgets
 
-    def _find_system_rop(self, controllable_call):
-        set_a0 = MipsInstruction('addiu', 'a0', 'sp')
-        load_system = MipsInstruction('la', 't9', 'system')
-
+    def _find_rop(self, controllable_call, search_instructions,
+                  preserve_reg=None):
         delay_slot = controllable_call.call.getNext()
-        if instruction_matches(delay_slot, [set_a0]):
+        if instruction_matches(delay_slot, search_instructions):
             return delay_slot
 
         fall_from = controllable_call.call.getFallFrom()
         if fall_from is None:
-            return False
+            previous_ins = controllable_call.call.getPrevious()
+        else:
+            previous_ins = self._flat_api.getInstructionAt(fall_from)
 
-        previous_ins = self._flat_api.getInstructionAt(fall_from)
         while previous_ins:
             if 'nop' in str(previous_ins):
                 previous_ins = previous_ins.getPrevious()
 
-            if instruction_matches(previous_ins, [set_a0]):
+            if instruction_matches(previous_ins, search_instructions):
                 return previous_ins
 
-            if register_overwritten(previous_ins, 'a0'):
+            if preserve_reg and \
+                    register_overwritten(previous_ins, preserve_reg):
                 return None
 
             # Need to see if we passed the point of caring.
-            if register_overwritten(previous_ins, controllable_call.control_instruction):
+            if register_overwritten(previous_ins,
+                                    controllable_call.control_instruction):
                 return None
 
             if is_jump(previous_ins):
-                return check_delay_slot(previous_ins, [set_a0])
+                return check_delay_slot(previous_ins, search_instructions,
+                                        preserve_reg)
 
             fall_from = previous_ins.getFallFrom()
             if fall_from is None:
-                return None
-            previous_ins = self._flat_api.getInstructionAt(fall_from)
+                previous_ins = previous_ins.getPrevious()
+            else:
+                previous_ins = self._flat_api.getInstructionAt(fall_from)
 
         return None
 
 
 def instruction_matches(ins, matches):
     for match in matches:
-        if match.mnem not in ins.getMnemonicString():
+        if not re.match(match.mnem, ins.getMnemonicString()):
             continue
         try:
-            if str(ins.getOpObjects(0)[0]) != match.op1:
+            if match.op1 and \
+                    not re.match(match.op1, str(ins.getOpObjects(0)[0])):
                 continue
-            if str(ins.getOpObjects(1)[0]) != match.op2:
+
+            if match.op2 and \
+                    not re.match(match.op2, str(ins.getOpObjects(1)[0])):
+                continue
+
+            if match.op3 and \
+                    not re.match(match.op3, str(ins.getOpObjects(2)[0])):
                 continue
             return True
-        except IndexError as e:
+        except IndexErrors:
             continue
-    return False
+        return False
 
 
 def register_overwritten(ins, register):
@@ -176,13 +218,13 @@ def register_overwritten(ins, register):
 
 
 def is_jump(ins):
-    return ins.getFlowType().isCall()
+    return ins.getFlowType().isCall() or ins.getFlowType().isJump()
 
 
-def check_delay_slot(ins, match):
+def check_delay_slot(ins, match, preserve_reg):
     next_ins = ins.getNext()
     if instruction_matches(next_ins, match):
         return next_ins
-    if register_overwritten(next_ins, 'a0'):
+    if preserve_reg and register_overwritten(next_ins, preserve_reg):
         return None
     return None

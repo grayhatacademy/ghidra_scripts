@@ -7,9 +7,11 @@
 from utils import mipsrop
 
 
+set_a0 = mipsrop.MipsInstruction('.*addiu', 'a0', 'sp')
+
 mips_rop = mipsrop.MipsRop(currentProgram)
 mips_rop.find_controllable_calls()
 
-system_rops = mips_rop.find_system_rops()
+system_rops = mips_rop.find_instructions([set_a0], 'a0')
 
 system_rops.pretty_print()
