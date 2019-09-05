@@ -36,6 +36,11 @@ Rename saved stack variables for easier tracking. Only valid in MIPS.
 # MIPS ROP Gadget Finder (Work in Progress)
 Find ROP gadgets in MIPS disassembly. Currently in development, these are the 
 "working" pieces so far. Sorry if functionality changes greatly.
+## Double Jumps
+Search for gadgets that contain double jumps.
+
+![Double Jump](./img/double.png)
+
 ## Find
 Find gadgets that contain custom MIPS instructions. Regular expressions are 
 supported. To search for a move to a0 from anything, simply search for 
