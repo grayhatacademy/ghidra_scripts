@@ -6,7 +6,6 @@
 
 from utils import mipsrop
 
-
 set_a0 = mipsrop.MipsInstruction('.*addiu', 'a0', 'sp')
 
 mips_rop = mipsrop.MipsRop(currentProgram)

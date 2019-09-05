@@ -33,9 +33,9 @@ Rename saved stack variables for easier tracking. Only valid in MIPS.
 
 ![Rename stack variables](./img/rename_variables.png)
 
-# MIPS ROP Gadget Finder (Work in Progress)
-Find ROP gadgets in MIPS disassembly. Currently in development, these are the 
-"working" pieces so far. Sorry if functionality changes greatly.
+# MIPS ROP Gadget Finder
+Find ROP gadgets in MIPS disassembly. 
+
 ## Double Jumps
 Search for gadgets that contain double jumps.
 
@@ -65,6 +65,14 @@ Find gadgets that place a stack address in a register.
 
 ![Stack Finders](./img/stack_finder.png)
 
+## Summary
+Print a summary of gadgets that have been book marked with the string `ropX` 
+where `X` is the gadgets position in the rop chain.
+
+![Creating a Book mark](./img/bookmark.png)
+
+![Summary](./img/summary.png)
+
 ## System Gadgets
 Find gadgets suitable for calling system with user controlled arguments.
 
@@ -75,7 +83,6 @@ Find gadgets suitable for calling system with user controlled arguments.
 In order, probably, of implementation. They may not be written if I get to them
 and they don't make sense to implement.
 
-* mipsrop (In development)
-* codatify
+* codatify (In development)
 * rizzo
 * leafblower

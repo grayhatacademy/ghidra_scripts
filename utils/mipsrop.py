@@ -4,6 +4,7 @@ from ghidra.program.flatapi import FlatProgramAPI
 
 format_string = '| {:12} | {:12} | {:30} | {:12} | {:30} |'
 format_double_string = '| {:12} | {:30} | {:12} | {:30} | {:12} | {:30} | {:12} | {:30} |'
+summary_format = '| {:15} | {:14} | {:30} |'
 
 
 class MipsInstruction(object):
@@ -82,6 +83,77 @@ class MipsRop(object):
                         gadgets.append(DoubleGadget(call, second_call))
 
         return gadgets
+
+    def summary(self):
+        """
+        Search for bookmarks that start with 'rop' and print a summary of the 
+        ROP gadgets. Case of 'rop' is not important. 
+        """
+        bookmark_manager = self._currentProgram.getBookmarkManager()
+        bookmarks = bookmark_manager.getBookmarksIterator()
+
+        saved_rops = []
+
+        for bookmark in bookmarks:
+            comment = bookmark.getComment().lower()
+            if comment.startswith('rop'):
+                for saved in saved_rops:
+                    if saved.getComment().lower() == comment:
+                        print 'Duplicate bookmark found: {} at {} and {}'.format(
+                            comment, saved.getAddress(), bookmark.getAddress())
+                        return
+                saved_rops.append(bookmark)
+
+        saved_rops = sorted(saved_rops, key=lambda x: x.comment.lower())
+
+        rop_gadgets = RopGadgets()
+        for rop in saved_rops:
+            closest_jmp = self._find_closest_controllable_jump(
+                rop.getAddress())
+            if closest_jmp:
+                curr_addr = rop.getAddress()
+                curr_ins = self._flat_api.getInstructionAt(curr_addr)
+                rop_gadgets.append(RopGadget(curr_ins, closest_jmp,
+                                             rop.getComment()))
+        rop_gadgets.print_summary()
+
+    def _find_closest_controllable_jump(self, address):
+        """
+        Find closest controllable jump to the address provided.
+
+        :param address: Address to find closest jump to.
+        :type address: ghidra.program.model.address.Address
+
+        :returns: Closest controllable jump, if it exists.
+        :rtype: ControllableCall or None
+        """
+        controllable = self.controllable_calls + \
+            self.controllable_terminating_calls
+
+        function = self._flat_api.getFunctionContaining(address)
+
+        closest = None
+
+        for jump in controllable[1:]:
+            jump_function = self._flat_api.getFunctionContaining(
+                jump.call.getAddress())
+            if function != jump_function:
+                continue
+
+            if address > jump.control_instruction.getAddress():
+                continue
+
+            if not closest or \
+                    jump.control_instruction.getAddress() <= \
+                    address <= jump.call.getAddress():
+                closest = jump
+            else:
+                control_addr = jump.control_instruction.getAddress()
+                closest_distances = closest.control_instruction.getAddress()
+                if control_addr.subtract(closest_distances) > \
+                        control_addr.subtract(address):
+                    closest = jump
+        return closest
 
     def _find_controllable_calls(self):
         """
@@ -284,18 +356,24 @@ class ControllableCall(object):
         return '{:10} {}'.format(self.call.getMnemonicString(),
                                  self.get_control_item())
 
+    def __str__(self):
+        return '{} {} -> {} {}'.format(self.control_instruction.getAddress(),
+                                       self.control_instruction,
+                                       self.call.getAddress(),
+                                       self.call)
+
 
 class RopGadget(object):
     """
     Class to represent discovered gadgets.
     """
 
-    def __init__(self, action, jump):
+    def __init__(self, action, jump, name=None):
         self.action = action
         self.jump = jump
+        self.name = name
 
     def __str__(self):
-
         control_addr = self.jump.control_instruction.getAddress()
         action_addr = self.action.getAddress()
 
@@ -307,6 +385,26 @@ class RopGadget(object):
                                     self.action,
                                     self.jump.call.getAddress(),
                                     self.jump.control_jump())
+
+    def get_instructions(self):
+        """
+        Get a list of instructions between the first instruction in the rop
+        and the call.
+        """
+        instructions = []
+
+        # Find the higher call, the action or the control instruction.
+        start_ins = self.action if self.action.getAddress() \
+            < self.jump.control_instruction.getAddress() else \
+            self.jump.control_instruction
+
+        instructions.append(start_ins)
+        curr_ins = start_ins
+        while curr_ins.getAddress() <= self.jump.call.getAddress():
+            curr_ins = curr_ins.getNext()
+            instructions.append(curr_ins)
+
+        return instructions
 
 
 class RopGadgets(object):
@@ -337,6 +435,28 @@ class RopGadgets(object):
                 print gadget
             print '-' * line_len
         print 'Found {} matching gadgets.\n'.format(len(self.gadgets))
+
+    def print_summary(self):
+        """
+        Print ROP chain summary.
+        """
+        if len(self.gadgets):
+            title = summary_format.format(
+                'Gadget Name', 'Gadget Offset', 'Summary')
+            line_len = len(title)
+            print '-' * line_len
+            print title
+            print '-' * line_len
+            for gadget in self.gadgets:
+                instructions = gadget.get_instructions()
+                print summary_format.format(gadget.name,
+                                            instructions[0].getAddress(),
+                                            instructions[0])
+                for instruction in instructions[1:]:
+                    print summary_format.format('', '', instruction)
+                print '-' * line_len
+        else:
+            print 'No bookmarks with "rop" found.'
 
 
 class DoubleGadget(object):
