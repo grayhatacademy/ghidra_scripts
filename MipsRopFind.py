@@ -28,8 +28,6 @@ if not mnem.startswith('.*'):
 search_ins = mipsrop.MipsInstruction(mnem, op1, op2, op3)
 
 mips_rop = mipsrop.MipsRop(currentProgram)
-mips_rop.find_controllable_calls()
-
 indirect_returns = mips_rop.find_instructions([search_ins])
 
 indirect_returns.pretty_print()
