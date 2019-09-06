@@ -11,6 +11,32 @@ be display using an modified graphviz library as well as Ghidra's console.
 
 ![Call Chain Text](./img/call_chain_text.png)
 
+# Codatify (Work in Progress)
+## Fixup Code (No started yet)
+This has not been written yet.
+
+## Fixup Data (Still working on, but mostly complete)
+Define undefined strings and data in the .rodata and .data sections.
+
+### Before 
+
+**Data Section**
+
+![Data Before](./img/before_data.png)
+
+**Cross Reference**
+![Xref Before](./img/before_xref.png)
+
+### After
+
+**Data Section**
+![Data After](./img/after_data.png)
+
+**Cross Reference**
+
+![Xref Before](./img/after_xref.png)
+
+
 # Fluorescence
 Highlight or un-highlight all function calls in the current binary.
 
