@@ -6,7 +6,7 @@ Script Manager. If you check the 'In Tool' checkbox they will appear under a
 # Table Of Contents
 [Call Chain](#call_chain) - Find call chains between two functions
 
-[Codatify](#codatify) - Fixup code and data.
+[Codatify](#codatify) - Fix up code and data.
 
 [Fluorescence](#fluorescence) - Highlight function calls.
 
@@ -45,11 +45,13 @@ Define undefined strings and data in the .rodata and .data sections.
 ![Data Before](./img/before_data.png)
 
 **Cross Reference**
+
 ![Xref Before](./img/before_xref.png)
 
 ### After
 
 **Data Section**
+
 ![Data After](./img/after_data.png)
 
 **Cross Reference**
@@ -64,6 +66,7 @@ Highlight or un-highlight all function calls in the current binary.
 ![Highlighted function calls](./img/fluorescence.png)
 
 <a name=func_profiler></a>
+
 # Function Profiler
 Display all cross references from the current function. Will display all 
 strings, functions, and labels. Depending on the size of the function, the 
@@ -72,12 +75,14 @@ console output size may need to be adjusted to view all the text.
 ![Function Profiler Output](./img/function_profiler.png)
 
 <a name=local_cross_ref></a>
+
 # Local Cross References
 Find references to the selected item in the current function.
 
 ![Local Cross References](./img/local_xrefs.png)
 
 <a name=mips_rop></a>
+
 # MIPS ROP Gadget Finder
 Find ROP gadgets in MIPS disassembly. 
 
@@ -124,6 +129,7 @@ Find gadgets suitable for calling system with user controlled arguments.
 ![System Gadgets](./img/system_gadget.png)
 
 <a name=rename_variables></a>
+
 # Rename Variables
 Rename saved stack variables for easier tracking. Only valid in MIPS.
 
