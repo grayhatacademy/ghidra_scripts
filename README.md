@@ -117,7 +117,8 @@ Find gadgets that place a stack address in a register.
 
 ## Summary
 Print a summary of gadgets that have been book marked with the string `ropX` 
-where `X` is the gadgets position in the rop chain.
+where `X` is the gadgets position in the rop chain. Double jumps can be displayed
+by appending `_d` to the `ropX` bookmark name: `ropX_d`.
 
 ![Creating a Book mark](./img/bookmark.png)
 

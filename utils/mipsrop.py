@@ -31,6 +31,21 @@ class MipsRop(object):
                           controllable_calls=True, terminating_calls=True):
         """
         Search for gadgets that contain user defined instructions.
+
+        :param instructions: List of instructions to search for.
+        :type instructions: list(MipsInstruction)
+
+        :param preserve_registers: Registers to preserve.
+        :type preserve_registers: str
+
+        :param controllable_calls: Search within controllable jumps.
+        :type controllable_calls: bool
+
+        :param terminating_calls: Search within controllable function epilogues.
+        :type terminating_calls: bool
+
+        :returns: List of rop gadgets that contain the provided instructions.
+        :rtype: list(RopGadgets)
         """
         gadgets = RopGadgets()
 
@@ -86,35 +101,52 @@ class MipsRop(object):
 
     def summary(self):
         """
-        Search for bookmarks that start with 'rop' and print a summary of the 
+        Search for book marks that start with 'rop' and print a summary of the 
         ROP gadgets. Case of 'rop' is not important. 
         """
         bookmark_manager = self._currentProgram.getBookmarkManager()
         bookmarks = bookmark_manager.getBookmarksIterator()
 
-        saved_rops = []
+        saved_bookmarks = []
 
         for bookmark in bookmarks:
             comment = bookmark.getComment().lower()
             if comment.startswith('rop'):
-                for saved in saved_rops:
+                for saved in saved_bookmarks:
                     if saved.getComment().lower() == comment:
                         print 'Duplicate bookmark found: {} at {} and {}'.format(
                             comment, saved.getAddress(), bookmark.getAddress())
                         return
-                saved_rops.append(bookmark)
+                saved_bookmarks.append(bookmark)
 
-        saved_rops = sorted(saved_rops, key=lambda x: x.comment.lower())
+        saved_bookmarks = sorted(saved_bookmarks,
+                                 key=lambda x: x.comment.lower())
 
         rop_gadgets = RopGadgets()
-        for rop in saved_rops:
+
+        # Go through each bookmark, find the closest controllable jump, and
+        # create a gadget.
+        for bookmark in saved_bookmarks:
             closest_jmp = self._find_closest_controllable_jump(
-                rop.getAddress())
-            if closest_jmp:
-                curr_addr = rop.getAddress()
+                bookmark.getAddress())
+
+            if bookmark.getComment().lower().endswith('_d'):
+                next_closest = self._find_closest_controllable_jump(
+                    closest_jmp.call.getAddress())
+                if closest_jmp and next_closest:
+                    # Hack to change the "control" instruction in case the
+                    # bookmark was placed at a different location.
+                    updated_ctrl = self._flat_api.getInstructionAt(
+                        bookmark.getAddress())
+                    closest_jmp.control_instruction = updated_ctrl
+
+                    rop_gadgets.append(DoubleGadget(closest_jmp, next_closest,
+                                                    bookmark.getComment()))
+            elif closest_jmp:
+                curr_addr = bookmark.getAddress()
                 curr_ins = self._flat_api.getInstructionAt(curr_addr)
                 rop_gadgets.append(RopGadget(curr_ins, closest_jmp,
-                                             rop.getComment()))
+                                             bookmark.getComment()))
         rop_gadgets.print_summary()
 
     def _find_closest_controllable_jump(self, address):
@@ -141,6 +173,10 @@ class MipsRop(object):
                 continue
 
             if address > jump.control_instruction.getAddress():
+                continue
+
+            # If the address is a jump do not consider it for the closest jump.
+            if jump.call.getAddress() == address:
                 continue
 
             if not closest or \
@@ -464,9 +500,10 @@ class DoubleGadget(object):
     Class to contain double jump gadget.
     """
 
-    def __init__(self, first, second):
+    def __init__(self, first, second, name=None):
         self.first = first
         self.second = second
+        self.name = name
 
     def __str__(self):
         return format_double_string.format(
@@ -477,6 +514,25 @@ class DoubleGadget(object):
             self.second.control_instruction,
             self.second.call.getAddress(),
             self.second.control_jump())
+
+    def get_instructions(self):
+        """
+        Get a list of instructions between the first instruction in the rop
+        and the call.
+        """
+        instructions = []
+
+        # Find the higher call, the action or the control instruction.
+        start_ins = self.first.control_instruction if self.first.control_instruction.getAddress() \
+            < self.first.call.getAddress() else self.first.call
+
+        instructions.append(start_ins)
+        curr_ins = start_ins
+        while curr_ins.getAddress() <= self.second.call.getAddress():
+            curr_ins = curr_ins.getNext()
+            instructions.append(curr_ins)
+
+        return instructions
 
 
 class DoubleGadgets(RopGadgets):
