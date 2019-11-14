@@ -4,6 +4,7 @@
 #@menupath TNS.Codatify.Fixup Code
 
 import time
+import string
 
 from ghidra.program.flatapi import FlatProgramAPI
 from ghidra.program.model.symbol import FlowType
@@ -12,18 +13,23 @@ from ghidra.program.model.symbol import FlowType
 FUNCTION_PREFIX = 'CFUN_%s'
 
 
-def get_section(section):
+def find_code():
     """
-    Find section in the code by name.
-
-    :param section: Section to find.
-    :type section: str
-
-    :returns: Section if found, None otherwise.
-    :rtype: ghidra.program.model.listing.ProgramFragment
+    Find executable code sections and return an address set representing the 
+    range.
     """
-    listing = currentProgram.getListing()
-    return getFragment(listing.getRootModule(0), section)
+    code_sections = []
+
+    addr_factory = currentProgram.getAddressFactory()
+    memory_manager = currentProgram.getMemory()
+    addr_view = memory_manager.getExecuteSet()
+
+    for section in addr_view:
+        new_view = addr_factory.getAddressSet(section.getMinAddress(),
+                                              section.getMaxAddress())
+        code_sections.append(new_view)
+
+    return code_sections
 
 
 def is_valid_function_end(last_instruction):
@@ -112,7 +118,26 @@ def clear_listing(addr_list, symbols=False, function=False, register=False):
                      False, False, False, False, False, False)
 
 
-def define_code_and_functions(section):
+def is_string(addr):
+    """
+    Check if address contains a 3 byte minimum string.
+    """
+    curr_bytes = getBytes(addr, 4)
+    try:
+        result = map(chr, curr_bytes.tolist())
+        if '\x00' in result[:3]:
+            return False
+        for character in result:
+            if character == '\x00':
+                continue
+            if character not in string.printable:
+                return False
+        return True
+    except ValueError:
+        return False
+
+
+def define_code_and_functions(start_addr, end_addr):
     """
     Convert undefined code in the section provided to defined code and a 
     function if applicable.
@@ -124,12 +149,6 @@ def define_code_and_functions(section):
     code_block_count = 0
     invalid_functions = []
 
-    if section is None:
-        return
-
-    start_addr = section.getMinAddress()
-    end_addr = section.getMaxAddress()
-
     undefined_code = getUndefinedDataAt(start_addr)
     if undefined_code is None:
         undefined_code = getUndefinedDataAfter(start_addr)
@@ -140,6 +159,12 @@ def define_code_and_functions(section):
         next_valid_ins = getInstructionAfter(undefined_addr)
 
         try:
+            if is_string(undefined_addr):
+                # Sometimes strings hang out in the executable code section.
+                # This can introduce false positives though.
+                createAsciiString(undefined_addr)
+                continue
+
             disassemble(undefined_addr)
 
             instruction_length = getInstructionAt(undefined_addr).getLength()
@@ -175,9 +200,11 @@ def define_code_and_functions(section):
     time.sleep(1)
     clear_listing(invalid_functions, register=True)
 
-    print 'Converted {} undefined code block and created {} new functions.'.format(
-        code_block_count, function_count)
+    print 'Converted {} undefined code block and created {} new functions in range {} -> {}.'.format(
+        code_block_count, function_count, start_addr, end_addr)
 
 
-curr_section = get_section('.text')
-define_code_and_functions(curr_section)
+# define_code_and_functions()
+for executable_section in find_code():
+    define_code_and_functions(executable_section.getMinAddress(),
+                              executable_section.getMaxAddress())

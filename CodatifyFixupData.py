@@ -4,18 +4,26 @@
 #@menupath TNS.Codatify.Fixup Data
 
 
-def get_section(section):
+def find_data_sections():
     """
-    Find section in the code by name.
-
-    :param section: Section to find.
-    :type section: str
-
-    :returns: Section if found, None otherwise.
-    :rtype: ghidra.program.model.listing.ProgramFragment
+    Search for non-executable sections in the memory map.
     """
-    listing = currentProgram.getListing()
-    return getFragment(listing.getRootModule(0), section)
+    data_sections = []
+
+    # Find all memory sections and remove the executable sections.
+    addr_factory = currentProgram.getAddressFactory()
+    memory_manager = currentProgram.getMemory()
+    address_ranges = memory_manager.getLoadedAndInitializedAddressSet()
+    executable_set = memory_manager.getExecuteSet()
+
+    addr_view = address_ranges.xor(executable_set)
+
+    for section in addr_view:
+        new_view = addr_factory.getAddressSet(section.getMinAddress(),
+                                              section.getMaxAddress())
+        data_sections.append(new_view)
+
+    return data_sections
 
 
 def define_strings(section):
@@ -39,8 +47,8 @@ def define_strings(section):
             except:
                 continue
 
-    print 'Defined {} new ascii strings in {}.'.format(string_count,
-                                                       section.getName())
+    print 'Defined {} new ascii strings in range {} -> {}.'.format(
+        string_count, section.getMinAddress(), section.getMaxAddress())
 
 
 def define_data(section):
@@ -70,8 +78,8 @@ def define_data(section):
         except:
             continue
 
-    print 'Converted {} undefined data entries to DWORDs in {}'.format(
-        data_count, section.getName())
+    print 'Converted {} undefined data entries to DWORDs in range {} -> {}'.format(
+        data_count, section.getMinAddress(), section.getMaxAddress())
 
 
 def fixup_section(section):
@@ -82,10 +90,11 @@ def fixup_section(section):
     :param section: Section to fixup.
     :type section: str
     """
-    curr_section = get_section(section)
-    define_strings(curr_section)
-    define_data(curr_section)
+    define_strings(section)
+    define_data(section)
 
 
-fixup_section('.rodata')
-fixup_section('.data')
+data_sections = find_data_sections()
+
+for section in data_sections:
+    fixup_section(section)
