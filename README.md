@@ -35,7 +35,8 @@ be display using a modified graphviz library as well as Ghidra's console.
 
 ----
 
-# Codatify (Work in Progress)
+# Codatify
+
 ## Fixup Code 
 Define all undefined data in the .text section as code and covert it to a 
 function if applicable.
@@ -49,7 +50,8 @@ function if applicable.
 ![Code After](./img/after_code.png)
 
 ## Fixup Data (No structure detection (yet?))
-Define undefined strings and data in the .rodata and .data sections.
+Define uninitialized strings and pointers in the code. All other uninitialized
+data is converted to a DWORD.
 
 ### Before 
 
