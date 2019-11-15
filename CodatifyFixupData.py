@@ -3,7 +3,7 @@
 #@category TNS
 #@menupath TNS.Codatify.Fixup Data
 
-from ghidra.program.model.data import Pointer32DataType
+from ghidra.program.model.data import PointerDataType
 
 
 def find_data_sections():
@@ -52,6 +52,13 @@ def define_strings(section):
     print 'Strings - {}'.format(string_count)
 
 
+def get_pointer_type():
+    """
+    Get the correct pointer size for the current architecture.
+    """
+    return PointerDataType(None, currentProgram.getDefaultPointerSize())
+
+
 def define_pointers(section):
     """
     Convert undefined data to valid pointers. 
@@ -70,7 +77,7 @@ def define_pointers(section):
         undefined_data = getUndefinedDataAfter(start_addr)
 
     pointer_count = 0
-    pointer_type = Pointer32DataType()
+    pointer_type = get_pointer_type()
     memory_manager = currentProgram.getMemory()
 
     while undefined_data is not None and undefined_data.getAddress() < end_addr:
