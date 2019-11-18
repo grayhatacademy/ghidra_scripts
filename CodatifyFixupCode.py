@@ -31,6 +31,19 @@ def find_code():
 
     return code_sections
 
+def is_aligned_instruction_address(inst_address):
+    """
+    Checks if the address is aligned according to the instruction alignment
+    defined by the currentProgram's language
+    
+    :param inst_address: Address of a potential instruction
+    :type inst_address: ghidra.program.model.listing.Address
+
+    :returns: True if inst_address is properly aligned, False otherwise. 
+    """
+    alignment = currentProgram.getLanguage().getInstructionAlignment()
+    return inst_address.offset % alignment == 0
+
 
 def is_valid_function_end(last_instruction):
     """
@@ -165,6 +178,8 @@ def define_code_and_functions(start_addr, end_addr):
                 createAsciiString(undefined_addr)
                 continue
 
+            if not is_aligned_instruction_address(undefined_addr):
+                continue
             disassemble(undefined_addr)
 
             instruction_length = getInstructionAt(undefined_addr).getLength()
