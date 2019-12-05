@@ -6,6 +6,7 @@
 
 from utils import leafblower
 
+print 'Searching for potential POSIX leaf functions...'
 leaf_finder = leafblower.LeafFunctionFinder(currentProgram)
 leaf_finder.find_leaves()
 leaf_finder.display()

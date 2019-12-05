@@ -99,7 +99,7 @@ console output size may need to be adjusted to view all the text.
 
 ----
 
-# Leaf Blower (In Progress)
+# Leaf Blower 
 Identify common POSIX functions such as printf, sprintf, memcmp, strcpy, etc
 
 ## Identify Leaf Functions
@@ -108,10 +108,13 @@ Identify leaf functions such as strcpy, strlen, atoi, etc.
 ![Leaf Functions Output](./img/leaf.png)
 
 
-<a name=local_cross_ref></a>
+## Identify Format Parameter Functions
+Identify funtions that accept format parameters to identify sprintf, printf, fscanf, etc.
 
-## Identify Format Parameter Functions (In Progress)
-Currently in progress.
+
+![Leaf Functions Output](./img/format.png)
+
+<a name=local_cross_ref></a>
 
 ----
 
@@ -185,5 +188,4 @@ Rename saved stack variables for easier tracking. Only valid in MIPS.
 In order, probably, of implementation. They may not be written if I get to them
 and they don't make sense to implement.
 
-* leafblower (In Progress)
-* rizzo
+* rizzo (In Progress as soon as I finish some tickets)

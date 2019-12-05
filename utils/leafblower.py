@@ -24,12 +24,28 @@ def get_argument_registers(current_program):
     return []
 
 
-class LeafFunction(object):
+class Function(object):
+    CANDIDATES = {}
+
+    def __init__(self, function, candidate_attr, has_loop=None,
+                 argument_count=-1, format_arg_index=-1):
+
+        self.name = function.getName()
+        self.xref_count = function.getSymbol().getReferenceCount()
+        self.has_loop = has_loop
+        self.argument_count = argument_count
+        self.format_arg_index = format_arg_index
+        self.candidates = []
+        if candidate_attr in self.CANDIDATES:
+            self.candidates = self.CANDIDATES[candidate_attr]
+
+
+class LeafFunction(Function):
     """
     Class to hold leaf function candidates.
     """
 
-    CANDIDATES_BY_ARGC = {
+    CANDIDATES = {
         1: ['atoi', 'atol', 'strlen'],
         2: ['strcpy', 'strcat', 'strcmp', 'strstr', 'strchr', 'strrchr',
             'bzero'],
@@ -40,16 +56,13 @@ class LeafFunction(object):
     FORMAT_STR = '| {:<15} | {:^10} | {:^6} | {:<65} |'
 
     def __init__(self, function, has_loop, argument_count):
-        self.name = function.getName()
-        self.xref_count = function.getSymbol().getReferenceCount()
-        self.has_loop = has_loop
-        self.arg_count = argument_count
-        self.candidates = LeafFunction.CANDIDATES_BY_ARGC[self.arg_count]
+        super(LeafFunction, self).__init__(
+            function, argument_count, has_loop, argument_count)
 
     def __str__(self):
         return LeafFunction.FORMAT_STR.format(self.name,
                                               self.xref_count,
-                                              self.arg_count,
+                                              self.argument_count,
                                               ','.join(self.candidates))
 
     @classmethod
@@ -71,15 +84,67 @@ class LeafFunction(object):
         return True
 
 
-class LeafFunctionFinder(object):
+class FormatFunction(Function):
+    """
+    Class to hold format string function candidates.
+    """
+
+    CANDIDATES = {
+        0: ['printf'],
+        1: ['sprintf', 'fprintf', 'fscanf', 'sscanf'],
+        2: ['snprintf']
+    }
+
+    FORMAT_STR = '| {:<15} | {:^10} | {:^12} | {:<45} |'
+
+    def __init__(self, function, format_arg_index):
+        super(FormatFunction, self).__init__(
+            function, format_arg_index, format_arg_index=format_arg_index)
+
+    def __str__(self):
+        return FormatFunction.FORMAT_STR.format(self.name,
+                                                self.xref_count,
+                                                self.format_arg_index,
+                                                ','.join(self.candidates))
+
+
+class FinderBase(object):
+    def __init__(self, program):
+        self._program = program
+        self._flat_api = FlatProgramAPI(program)
+        self._monitor = self._flat_api.getMonitor()
+        self._basic_blocks = BasicBlockModel(self._program)
+
+    def _display(self, title, entries):
+        """
+        Print a simple table to the terminal.
+
+        :param title: Title of the table.
+        :type title: str
+
+        :param entries: Entries to print in the table.
+        :type entries: list(str)
+        """
+        lines = [str(entry) for entry in entries]
+        max_line_len = len(max(lines))
+
+        print '=' * max_line_len
+        print title
+        print '=' * max_line_len
+        for line in lines:
+            print line
+
+        print '-' * max_line_len
+
+
+class LeafFunctionFinder(FinderBase):
     """
     Leaf function finder class. 
     """
 
     def __init__(self, program):
+        super(LeafFunctionFinder, self).__init__(program)
         self.leaf_functions = []
-        self._program = program
-        self._flat_api = FlatProgramAPI(program)
 
     def find_leaves(self):
         """
@@ -105,17 +170,9 @@ class LeafFunctionFinder(object):
         """
         Print leaf function candidates to the terminal.
         """
-        lines = [str(leaf) for leaf in self.leaf_functions]
-        max_line_len = len(max(lines))
-
-        print '=' * max_line_len
-        print LeafFunction.FORMAT_STR.format('Function', 'XRefs', 'Args',
-                                             'Potential Function')
-        print '=' * max_line_len
-        for line in lines:
-            print line
-
-        print '-' * max_line_len
+        title = LeafFunction.FORMAT_STR.format('Function', 'XRefs', 'Args',
+                                               'Potential Function')
+        self._display(title, self.leaf_functions)
 
     def _function_makes_call(self, function):
         """
@@ -149,15 +206,13 @@ class LeafFunctionFinder(object):
         :returns: True if the function has loops, False otherwise.
         :rtype: bool
         """
-        monitor = self._flat_api.getMonitor()
-        basic_blocks = BasicBlockModel(self._program)
 
-        function_blocks = basic_blocks.getCodeBlocksContaining(function.body,
-                                                               monitor)
+        function_blocks = self._basic_blocks.getCodeBlocksContaining(
+            function.body, self._monitor)
 
         while function_blocks.hasNext():
             block = function_blocks.next()
-            destinations = block.getDestinations(monitor)
+            destinations = block.getDestinations(self._monitor)
 
             # Determine if the current block can result in jumping to a block
             # above the end address and in the same function. This indicates
@@ -215,3 +270,109 @@ class LeafFunctionFinder(object):
             curr_ins = curr_ins.next
 
         return len(used_args)
+
+
+class FormatStringFunctionFinder(FinderBase):
+    def __init__(self, program):
+        super(FormatStringFunctionFinder, self).__init__(program)
+        self._memory_map = self._program.getMemory()
+        self.format_strings = self._find_format_strings()
+        self.format_functions = []
+
+    def _find_format_strings(self):
+        """
+        Find strings that contain format parameters.
+
+        :returns: List of addresses that represent format string parameters.
+        :rtype: list(ghidra.program.model.listing.Address
+        """
+        format_strings = []
+        memory = self._memory_map.getAllInitializedAddressSet()
+        strings = self._flat_api.findStrings(memory, 2, 1, True, True)
+
+        for string in strings:
+            curr_string = string.getString(self._memory_map)
+            if '%' in curr_string:
+                format_strings.append(string.getAddress())
+        return format_strings
+
+    def _find_function_by_instruction(self, instruction):
+        """
+        Find function associated with the instruction provided. Used to find
+        function calls associated with parameters. Only searches in the 
+        code block of the provided instruction.
+
+        :param instruction: Instruction to begin search from.
+        :type instruction: ghidra.program.model.listing.Instruction
+
+        :returns: Function if found, None otherwise.
+        :rtype: ghidra.program.model.listing.Function
+        """
+        containing_block = self._basic_blocks.getCodeBlocksContaining(
+            instruction.getAddress(), self._monitor)[0]
+
+        # Check if the current instruction is in the delay slot, back up one
+        # instruction if true in case its a call.
+        if instruction.isInDelaySlot():
+            curr_ins = instruction.previous
+        else:
+            curr_ins = instruction
+
+        while curr_ins and curr_ins.getAddress() < containing_block.maxAddress:
+            if utils.is_call_instruction(curr_ins):
+                function_flow = curr_ins.getFlows()
+                if function_flow:
+                    # The call instruction should only have one flow so
+                    # grabbing the first flow is fine.
+                    return self._flat_api.getFunctionAt(function_flow[0])
+            curr_ins = curr_ins.next
+
+        return None
+
+    def display(self):
+        """
+        Print format function candidates to the terminal.
+        """
+        title = FormatFunction.FORMAT_STR.format('Function', 'XRefs',
+                                                 'Fmt Index',
+                                                 'Potential Function')
+        self._display(title, self.format_functions)
+
+    def find_functions(self):
+        """
+        Find functions that take format strings as an argument.
+        """
+        processed_functions = []
+        registers = get_argument_registers(self._program)
+
+        for string in self.format_strings:
+            references = self._flat_api.getReferencesTo(string)
+            for reference in references:
+                if not reference.getReferenceType() == RefType.PARAM:
+                    continue
+
+                # Get the instruction that references the format string.
+                instruction = self._flat_api.getInstructionAt(
+                    reference.fromAddress)
+
+                function = self._find_function_by_instruction(instruction)
+                if not function:
+                    continue
+
+                function_name = function.getName()
+
+                if function_name in processed_functions:
+                    continue
+
+                register_used = instruction.getOpObjects(
+                    reference.getOperandIndex())
+                register_index = registers.index(register_used[0].toString())
+
+                self.format_functions.append(FormatFunction(function,
+                                                            register_index))
+
+                processed_functions.append(function_name)
+
+        # Sort the functions by cross reference count
+        self.format_functions.sort(key=lambda fmt_fn: fmt_fn.xref_count,
+                                   reverse=True)
