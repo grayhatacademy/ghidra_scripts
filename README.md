@@ -12,6 +12,8 @@ Script Manager. If you check the 'In Tool' checkbox they will appear under a
 
 [Function Profiler](#func_profiler) - Display cross refs from the current function.
 
+[Leaf Blower](#leafblower) - Identify common POSIX functions.
+
 [Local Cross References](#local_cross_ref) - Find references to items in the current function.
 
 [MIPS Rop Finder](#mips_rop) - Find ROP gadgets in MIPS disassembly.
@@ -93,7 +95,23 @@ console output size may need to be adjusted to view all the text.
 
 ![Function Profiler Output](./img/function_profiler.png)
 
+<a name=leafblower></a>
+
+----
+
+# Leaf Blower (In Progress)
+Identify common POSIX functions such as printf, sprintf, memcmp, strcpy, etc
+
+## Identify Leaf Functions
+Identify leaf functions such as strcpy, strlen, atoi, etc.
+
+![Leaf Functions Output](./img/leaf.png)
+
+
 <a name=local_cross_ref></a>
+
+## Identify Format Parameter Functions (In Progress)
+Currently in progress.
 
 ----
 
@@ -167,5 +185,5 @@ Rename saved stack variables for easier tracking. Only valid in MIPS.
 In order, probably, of implementation. They may not be written if I get to them
 and they don't make sense to implement.
 
+* leafblower (In Progress)
 * rizzo
-* leafblower
