@@ -151,6 +151,15 @@ def fixup_section(section):
     print '\n'
 
 
+# Base address of 0 can really mess things up when fixing up pointers.
+# Make sure the user really wants this.
+base_addr = currentProgram.getMinAddress()
+if base_addr.toString() == u'00000000' and \
+    not askYesNo('Base Address Zero', 'The base address is set to 0 which can '
+                 'introduce a large amount of false positives when fixing up '
+                 'the data section. \nDo you want to continue?'):
+    exit(0)
+
 data_sections = find_data_sections()
 
 for section in data_sections:
