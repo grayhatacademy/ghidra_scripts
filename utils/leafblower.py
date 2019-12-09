@@ -53,17 +53,13 @@ class LeafFunction(Function):
             'bcopy', 'memcmp', 'memset']
     }
 
-    FORMAT_STR = '| {:<15} | {:^10} | {:^6} | {:<65} |'
-
     def __init__(self, function, has_loop, argument_count):
         super(LeafFunction, self).__init__(
             function, argument_count, has_loop, argument_count)
 
-    def __str__(self):
-        return LeafFunction.FORMAT_STR.format(self.name,
-                                              self.xref_count,
-                                              self.argument_count,
-                                              ','.join(self.candidates))
+    def to_list(self):
+        return [self.name, str(self.xref_count), str(self.argument_count),
+                ','.join(self.candidates)]
 
     @classmethod
     def is_candidate(cls, function, has_loop, argument_count):
@@ -95,17 +91,13 @@ class FormatFunction(Function):
         2: ['snprintf']
     }
 
-    FORMAT_STR = '| {:<15} | {:^10} | {:^12} | {:<45} |'
-
     def __init__(self, function, format_arg_index):
         super(FormatFunction, self).__init__(
             function, format_arg_index, format_arg_index=format_arg_index)
 
-    def __str__(self):
-        return FormatFunction.FORMAT_STR.format(self.name,
-                                                self.xref_count,
-                                                self.format_arg_index,
-                                                ','.join(self.candidates))
+    def to_list(self):
+        return [self.name, str(self.xref_count), str(self.format_arg_index),
+                ','.join(self.candidates)]
 
 
 class FinderBase(object):
@@ -120,21 +112,45 @@ class FinderBase(object):
         Print a simple table to the terminal.
 
         :param title: Title of the table.
-        :type title: str
+        :type title: list
 
         :param entries: Entries to print in the table.
-        :type entries: list(str)
+        :type entries: list(list(str))
         """
-        lines = [str(entry) for entry in entries]
-        max_line_len = len(max(lines))
+        lines = [title] + entries
 
-        print '=' * max_line_len
-        print title
-        print '=' * max_line_len
-        for line in lines:
-            print line
+        # Find the largest entry in each column so it can be used later
+        # for the format string.
+        max_line_len = []
+        for i in range(0, len(title)):
+            column_lengths = [len(line[i]) for line in lines]
+            max_line_len.append(max(column_lengths))
 
-        print '-' * max_line_len
+        # Account for largest entry, spaces, and '|' characters on each line.
+        separator = '=' * (sum(max_line_len) +
+                           (len(title) * (len(title) - 1))
+                           + 1)
+        spacer = '|'
+        format_specifier = '{:<{width}}'
+
+        # First block prints the title and '=' characters to make a title
+        # border
+        print separator
+        print spacer,
+        for width, column in zip(max_line_len, title):
+            print format_specifier.format(column, width=width),
+            print spacer,
+        print ''
+        print separator
+
+        # Print the actual entries.
+        for entry in entries:
+            print spacer,
+            for width, column in zip(max_line_len, entry):
+                print format_specifier.format(column, width=width),
+                print spacer,
+            print ''
+        print separator
 
 
 class LeafFunctionFinder(FinderBase):
@@ -170,9 +186,10 @@ class LeafFunctionFinder(FinderBase):
         """
         Print leaf function candidates to the terminal.
         """
-        title = LeafFunction.FORMAT_STR.format('Function', 'XRefs', 'Args',
-                                               'Potential Function')
-        self._display(title, self.leaf_functions)
+        title = ['Function', 'XRefs', 'Args', 'Potential Function']
+        leaf_list = [leaf.to_list() for leaf in self.leaf_functions]
+
+        self._display(title, leaf_list)
 
     def _function_makes_call(self, function):
         """
@@ -333,10 +350,10 @@ class FormatStringFunctionFinder(FinderBase):
         """
         Print format function candidates to the terminal.
         """
-        title = FormatFunction.FORMAT_STR.format('Function', 'XRefs',
-                                                 'Fmt Index',
-                                                 'Potential Function')
-        self._display(title, self.format_functions)
+        title = ['Function', 'XRefs', 'Fmt Index', 'Potential Function']
+        format_list = [format.to_list() for format in self.format_functions]
+
+        self._display(title, format_list)
 
     def find_functions(self):
         """
