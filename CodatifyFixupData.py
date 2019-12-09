@@ -3,6 +3,9 @@
 #@category TNS
 #@menupath TNS.Codatify.Fixup Data
 
+
+from utils import functiontable
+
 from ghidra.program.model.data import PointerDataType
 
 
@@ -148,6 +151,11 @@ def fixup_section(section):
     define_pointers(section)
     define_strings(section)
     define_data(section)
+
+    ft_finder = functiontable.Finder(currentProgram, section)
+    ft_finder.find_function_table()
+    ft_finder.rename_functions()
+
     print '\n'
 
 
@@ -162,5 +170,6 @@ if base_addr.toString() == u'00000000' and \
 
 data_sections = find_data_sections()
 
+print 'Fixing up data...\n'
 for section in data_sections:
     fixup_section(section)
