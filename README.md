@@ -51,9 +51,10 @@ function if applicable.
 
 ![Code After](./img/after_code.png)
 
-## Fixup Data (No structure detection (yet?))
+## Fixup Data
 Define uninitialized strings and pointers in the code. All other uninitialized
-data is converted to a DWORD.
+data is converted to a DWORD. Finally, search for function tables and rename
+functions based off the discovered tables.
 
 ### Before 
 
