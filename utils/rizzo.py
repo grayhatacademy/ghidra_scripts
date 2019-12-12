@@ -324,7 +324,11 @@ class Rizzo(object):
 
         print 'Loading signatures from %s...' % signature_file
         with open(signature_file, 'rb') as rizz_file:
-            signatures = pickle.load(rizz_file)
+            try:
+                signatures = pickle.load(rizz_file)
+            except:
+                print 'This does not appear to be a Rizzo signature file.'
+                exit(1)
         print 'done.'
         return signatures
 
@@ -344,7 +348,7 @@ class Rizzo(object):
                 curr_addr = self._address_factory.getAddress(
                     hex(curr_func.address)[:-1])
                 function = self._flat_api.getFunctionAt(curr_addr)
-                if new_func.name not in renamed:
+                if function and new_func.name not in renamed:
                     renamed.append(new_func.name)
                     if self._rename_functions(function, new_func.name):
                         rename_count += 1
@@ -423,6 +427,9 @@ class Rizzo(object):
         :returns: True if function renamed, False for no rename.
         :rtype: bool
         """
+        if not function or not name:
+            return False
+
         if 'FUN_' in function.name and 'FUN_' not in name:
             if function:
                 print 'Renaming %s to %s' % (function.name, name)
