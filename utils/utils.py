@@ -50,3 +50,23 @@ def get_processor(current_program):
     """
     language = current_program.getLanguage()
     return language.getProcessor().toString()
+
+
+def find_function(current_program, function_name):
+    listing = current_program.getListing()
+    if listing:
+        return listing.getGlobalFunctions(function_name)
+    return []
+
+
+def address_to_int(address):
+    """
+    Convert Ghidra address to integer.
+
+    :param address: Address to convert to integer.
+    :type address: ghidra.program.model.address.Address
+
+    :returns: Integer representation of the address.
+    :rtype: int
+    """
+    return int(address.toString(), 16)
