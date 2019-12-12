@@ -4,8 +4,9 @@
 #@menupath TNS.Mips Rops.Summary
 
 
-from utils import mipsrop
+from utils import mipsrop, utils
 
+utils.allowed_processors(currentProgram, 'MIPS')
 
 mips_rop = mipsrop.MipsRop(currentProgram)
 mips_rop.summary()

@@ -5,7 +5,9 @@
 
 
 import re
-from utils import mipsrop
+from utils import mipsrop, utils
+
+utils.allowed_processors(currentProgram, 'MIPS')
 
 op1 = None
 op2 = None

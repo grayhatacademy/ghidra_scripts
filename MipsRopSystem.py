@@ -4,7 +4,9 @@
 #@menupath TNS.Mips Rops.System Calls
 
 
-from utils import mipsrop
+from utils import mipsrop, utils
+
+utils.allowed_processors(currentProgram, 'MIPS')
 
 set_a0 = mipsrop.MipsInstruction('.*addiu', 'a0', 'sp')
 

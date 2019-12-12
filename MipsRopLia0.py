@@ -4,7 +4,9 @@
 #@menupath TNS.Mips Rops.Li a0
 
 
-from utils import mipsrop
+from utils import mipsrop, utils
+
+utils.allowed_processors(currentProgram, 'MIPS')
 
 li_a0 = mipsrop.MipsInstruction('.*li', 'a0', '0x.*')
 

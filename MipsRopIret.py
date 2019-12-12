@@ -4,7 +4,9 @@
 #@menupath TNS.Mips Rops.Indirect Return
 
 
-from utils import mipsrop
+from utils import mipsrop, utils
+
+utils.allowed_processors(currentProgram, 'MIPS')
 
 move_t9 = mipsrop.MipsInstruction('.*move', 't9', '[sav][012345678]')
 

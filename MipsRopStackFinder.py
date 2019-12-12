@@ -4,7 +4,9 @@
 #@menupath TNS.Mips Rops.Stack Finder
 
 
-from utils import mipsrop
+from utils import mipsrop, utils
+
+utils.allowed_processors(currentProgram, 'MIPS')
 
 sf_saved_reg = mipsrop.MipsInstruction('.*addiu', '[sva][012345678]', 'sp')
 

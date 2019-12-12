@@ -53,6 +53,15 @@ def get_processor(current_program):
 
 
 def find_function(current_program, function_name):
+    """
+    Find a function, by name, in the current program.
+
+    :param current_program: Current program loaded in Ghidra.
+    :type current_program: ghidra.program.model.listing.Program
+
+    :param function_name: Function to search for.
+    :type function_name: str
+    """
     listing = current_program.getListing()
     if listing:
         return listing.getGlobalFunctions(function_name)
@@ -70,3 +79,21 @@ def address_to_int(address):
     :rtype: int
     """
     return int(address.toString(), 16)
+
+
+def allowed_processors(current_program, processor_list):
+    """
+    Function to prevent scripts from running against unsupported processors.
+
+    :param current_program: Current program loaded in Ghidra.
+    :type current_program: ghidra.program.model.listing.Program
+
+    :param processor_list: List of supported processors.
+    :type processor_list: list(str)
+    """
+    curr_processor = get_processor(current_program)
+
+    if curr_processor not in processor_list:
+        print '%s is not a valid processor for this script. Supported ' \
+            'processors are: %s' % (curr_processor, processor_list)
+        exit(1)

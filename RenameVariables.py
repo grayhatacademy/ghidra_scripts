@@ -4,7 +4,11 @@
 #@keybinding
 #@menupath TNS.Rename Variables
 
+from utils import utils
 from ghidra.program.model.symbol import SourceType
+
+
+utils.allowed_processors(currentProgram, 'MIPS')
 
 func_man = currentProgram.getFunctionManager()
 code_man = currentProgram.getCodeManager()

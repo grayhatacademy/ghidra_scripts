@@ -1,4 +1,4 @@
-# Identify potential POSIX functions in the current program such as
+# Identify potential POSIX functions in the current program such as sprintf, fprintf, sscanf, etc.
 #@author fuzzywalls
 #@category TNS
 #@menupath TNS.Leaf Blower.Find format string functions
