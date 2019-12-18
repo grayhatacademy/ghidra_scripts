@@ -73,6 +73,12 @@ def get_argument_registers():
 
 
 def get_return_registers():
+    """
+    Get return registers for the current processor.
+
+    :returns: List of return registers.
+    :rtype: list(str)
+    """
     arch = utils.get_processor(currentProgram)
 
     if arch == 'MIPS':
@@ -90,16 +96,16 @@ def get_destination(instruction):
     :param instruction: Instruction to find destination register for.
     :type instruction: ghidra.program.model.listing.Instruction
 
-    :returns: Destination register if found, None if not found.
-    :rtype: ghidra.program.model.listing.Register
+    :returns: List of destination registers if found, empty list if not found.
+    :rtype: list(str)
     """
     if not instruction:
         return None
 
     result = instruction.getResultObjects()
-    if len(result) == 1:
-        return result[0]
-    return None
+    if not result:
+        return []
+    return [res.toString() for res in result]
 
 
 def find_call(address):
@@ -205,15 +211,15 @@ def get_argument_source(address, argument):
     while curr_addr and curr_addr > entry_point:
         if curr_ins.getDelaySlotDepth() > 0:
             delay_slot = curr_ins.next
-            dest = get_destination(delay_slot)
-            if dest and dest.toString() == argument:
+            destinations = get_destination(delay_slot)
+            if destinations and argument in destinations:
                 src = get_source(delay_slot)
                 if src is None:
                     src = argument
                 return src
 
-        dest = get_destination(curr_ins)
-        if dest and dest.toString() == argument:
+        destinations = get_destination(curr_ins)
+        if destinations and argument in destinations:
             src = get_source(curr_ins)
             break
 
@@ -342,6 +348,8 @@ class Operator(object):
         calls = []
         for call in self.function_calls:
             containing_fn = getFunctionContaining(call)
+            if not containing_fn:
+                continue
             curr_call = Call(call, containing_fn, operator.function)
             arguments = arg_registers[:operator.function.arg_count]
             sources = []
