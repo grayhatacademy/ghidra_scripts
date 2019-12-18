@@ -117,6 +117,7 @@ def discover_call_chain(from_function, to_function):
 
 func_man = currentProgram.getFunctionManager()
 function_list = [function for function in func_man.getFunctions(True)]
+function_list.sort(key=lambda func: func.name)
 
 from_function = askChoice('Select function',
                           'Select the starting function',
