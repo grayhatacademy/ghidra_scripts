@@ -4,6 +4,8 @@ Script Manager. If you check the 'In Tool' checkbox they will appear under a
 'TNS' tag. 
 
 # Table Of Contents
+
+## OG Scripts
 [Call Chain](#call_chain) - Find call chains between two functions
 
 [Codatify](#codatify) - Fix up code and data.
@@ -22,6 +24,8 @@ Script Manager. If you check the 'In Tool' checkbox they will appear under a
 
 [Rizzo](#rizzo) - Create fuzzy function signatures that can be applied to other projects.
 
+## New Scripts
+[Operator](#operator) - Identify calls to functions and the parameters that are provided to the function.
 
 ----
 
@@ -126,8 +130,19 @@ Find references to the selected item in the current function.
 
 ![Local Cross References](./img/local_xrefs.png)
 
-<a name=mips_rop></a>
 
+<a name=operator></a>
+----
+
+# Operator
+Identify calls and the parameters provided to the function when called. The 
+script will take into account variadic arguments if they can be identified, 
+however, passing argument via the stack will not.
+
+![Function Calls](./img/operator.png)
+
+
+<a name=mips_rop></a>
 ----
 
 # MIPS ROP Gadget Finder
