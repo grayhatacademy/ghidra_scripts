@@ -45,5 +45,4 @@ for func in func_list:
 
                         # Remove the saved register to avoid renaming registers
                         # saved later.
-                        index = savable_registers.index(saved_register)
-                        savable_registers = savable_registers[:index]
+                        savable_registers.remove(saved_register)
