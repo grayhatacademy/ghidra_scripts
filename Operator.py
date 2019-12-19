@@ -6,7 +6,9 @@
 from utils import utils
 
 from ghidra.program.model.symbol import RefType
+from ghidra.program.flatapi import FlatProgramAPI
 from ghidra.program.model.block import BasicBlockModel
+from ghidra.app.decompiler.flatapi import FlatDecompilerAPI
 
 
 def display(title, entries):
@@ -251,7 +253,7 @@ class FunctionPrototype(object):
         else:
             self.arg_count = self._get_argument_count()
 
-    def _get_argument_count(self):
+    def _get_argument_count_manual(self):
         """
         Manual argument identification for function based on used argument
         registers in the function prior to setting them.
@@ -290,6 +292,32 @@ class FunctionPrototype(object):
             curr_ins = curr_ins.next
 
         return len(used_args)
+
+    def _get_argument_count(self):
+        """
+        Get argument count through decompiler if possible otherwise try to
+        determine the argument count manually. Manual approach can miss
+        arguments if they are used in the first function call of the function.
+        """
+        flat_api = FlatProgramAPI(currentProgram)
+        decompiler_api = FlatDecompilerAPI(flat_api)
+
+        # Must call decompile first or the decompiler will not be initialized.
+        decompiler_api.decompile(self.function)
+        decompiler = decompiler_api.getDecompiler()
+
+        if decompiler:
+            decompiled_fn = decompiler.decompileFunction(self.function,
+                                                         10,
+                                                         getMonitor())
+            if decompiled_fn:
+                high_level_fn = decompiled_fn.getHighFunction()
+                if high_level_fn:
+                    prototype = high_level_fn.getFunctionPrototype()
+                    if prototype:
+                        return prototype.getNumParams()
+
+        return self._get_argument_count_manual()
 
 
 class Call(object):
