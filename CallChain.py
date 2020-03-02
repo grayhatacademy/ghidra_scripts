@@ -40,6 +40,11 @@ def get_references(caller, callee):
     return ref_list
 
 def sanitize_dot(func):
+    """
+    Return a sanitized function name string compatible with DOT representation.
+
+    :param func: Function object
+    """
     return str(func).replace("::","\\")
 
 def print_call_chain(call_chain, dot):
