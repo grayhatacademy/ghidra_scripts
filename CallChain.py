@@ -64,13 +64,13 @@ def print_call_chain(call_chain, dot):
         function_name=sanitize_dot(function)
 
         if function == call_chain[0]:
-            dot.node(function_name, function_name, style='filled',
+            dot.node(function_name, str(function), style='filled',
                      color='blue', fontcolor='white')
         elif function == call_chain[-1]:
-            dot.node(function_name, function_name, style='filled',
+            dot.node(function_name, str(function), style='filled',
                      color='red', fontcolor='white')
         else:
-            dot.node(function_name, function_name)
+            dot.node(function_name, str(function))
         if previous_function:
             previous_function_name=sanitize_dot(previous_function)
             dot.edge(previous_function_name, function_name)
