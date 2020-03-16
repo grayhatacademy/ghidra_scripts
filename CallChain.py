@@ -39,6 +39,13 @@ def get_references(caller, callee):
 
     return ref_list
 
+def sanitize_dot(func):
+    """
+    Return a sanitized function name string compatible with DOT representation.
+
+    :param func: Function object
+    """
+    return str(func).replace("::","\\")
 
 def print_call_chain(call_chain, dot):
     """
@@ -54,16 +61,19 @@ def print_call_chain(call_chain, dot):
     for function in call_chain:
         references = []
 
+        function_name=sanitize_dot(function)
+
         if function == call_chain[0]:
-            dot.node(str(function), str(function), style='filled',
+            dot.node(function_name, str(function), style='filled',
                      color='blue', fontcolor='white')
         elif function == call_chain[-1]:
-            dot.node(str(function), str(function), style='filled',
+            dot.node(function_name, str(function), style='filled',
                      color='red', fontcolor='white')
         else:
-            dot.node(str(function), str(function))
+            dot.node(function_name, str(function))
         if previous_function:
-            dot.edge(str(previous_function), str(function))
+            previous_function_name=sanitize_dot(previous_function)
+            dot.edge(previous_function_name, function_name)
             function_references[str(previous_function)] = get_references(
                 previous_function, function)
 
@@ -117,7 +127,7 @@ def discover_call_chain(from_function, to_function):
 
 func_man = currentProgram.getFunctionManager()
 function_list = [function for function in func_man.getFunctions(True)]
-function_list.sort(key=lambda func: func.name)
+function_list.sort(key=lambda func: str(func))
 
 from_function = askChoice('Select function',
                           'Select the starting function',
