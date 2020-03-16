@@ -28,21 +28,25 @@ class MipsRop(object):
         self._find_controllable_calls()
 
     def find_instructions(self, instructions, preserve_register=None,
-                          controllable_calls=True, terminating_calls=True):
+                          controllable_calls=True, terminating_calls=True,
+                          overwrite_register=None):
         """
         Search for gadgets that contain user defined instructions.
 
         :param instructions: List of instructions to search for.
         :type instructions: list(MipsInstruction)
 
-        :param preserve_registers: Registers to preserve.
-        :type preserve_registers: str
+        :param preserve_register: Registers to preserve.
+        :type preserve_register: str
 
         :param controllable_calls: Search within controllable jumps.
         :type controllable_calls: bool
 
         :param terminating_calls: Search within controllable function epilogues.
         :type terminating_calls: bool
+
+        :param overwrite_register: Register to ensure is overwritten.
+        :param overwrite_register: str
 
         :returns: List of rop gadgets that contain the provided instructions.
         :rtype: list(RopGadgets)
@@ -56,7 +60,8 @@ class MipsRop(object):
             search_calls.extend(self.controllable_terminating_calls)
 
         for call in search_calls:
-            rop = self._find_instruction(call, instructions, preserve_register)
+            rop = self._find_instruction(
+                call, instructions, preserve_register, overwrite_register)
             if rop:
                 gadgets.append(RopGadget(rop, call))
 
@@ -277,7 +282,7 @@ class MipsRop(object):
         return previous_ins
 
     def _find_instruction(self, controllable_call, search_instructions,
-                          preserve_reg=None):
+                          preserve_reg=None, overwrite_reg=None):
         """
         Search for an instruction within a controllable call. 
 
@@ -291,9 +296,14 @@ class MipsRop(object):
                              instruction will not be returned.
         :type preserve_reg: str
 
+        :param overwrite_reg: Enforce a register was overwritten.
+        :type overwrite_reg: str
+
         :returns: The matching instruction if found, None otherwise.
         :rtype: ghidra.program.model.listing.Instruction
         """
+        overwritten = False
+
         delay_slot = controllable_call.call.getNext()
         if instruction_matches(delay_slot, search_instructions):
             return delay_slot
@@ -305,11 +315,17 @@ class MipsRop(object):
                 previous_ins = previous_ins.getPrevious()
 
             if instruction_matches(previous_ins, search_instructions):
+                if overwrite_reg and not overwritten:
+                    return None
                 return previous_ins
 
             if preserve_reg and \
                     register_overwritten(previous_ins, preserve_reg):
                 return None
+
+            if overwrite_reg and register_overwritten(previous_ins,
+                                                      overwrite_reg):
+                overwritten = True
 
             # TODO: Need to see if we passed the point of caring.
             if register_overwritten(previous_ins,
