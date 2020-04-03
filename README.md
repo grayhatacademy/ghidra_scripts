@@ -27,6 +27,10 @@ Script Manager. If you check the 'In Tool' checkbox they will appear under a
 ## New Scripts
 [Operator](#operator) - Identify calls to functions and the parameters that are provided to the function.
 
+[MIPS Rop Finder](#mips_rop) Prologue Gadget - Find controllable gadgets at the beginning of functions that provide stack pointer movement.
+
+[MIPS Rop Finder](#mips_rop) Epilogue Gadget - Find gadgets that grant control of more saved registers.
+
 ----
 
 <a name=call_chain></a>
@@ -153,6 +157,13 @@ Search for gadgets that contain double jumps.
 
 ![Double Jump](./img/double.png)
 
+## Epilogue
+Find gadgets the give control of saved registers.
+
+![User Input](./img/epilogue_input.png)
+
+![Epilogue Result](./img/epilogue.png)
+
 ## Find
 Find gadgets that contain custom MIPS instructions. Regular expressions are 
 supported. To search for a move to a0 from anything, simply search for 
@@ -171,6 +182,11 @@ Find indirect return gadgets. Call t9 and then return to ra.
 Find gadgets that load a small value into a0. Useful for calling sleep.
 
 ![Li a0](./img/lia0.png)
+
+## Prologue
+Find controllable gadgets at the beginning of functions that provide stack pointer movement.
+
+![Prologue Result](./img/prologue.png)
 
 ## Stack Finder
 Find gadgets that place a stack address in a register.
