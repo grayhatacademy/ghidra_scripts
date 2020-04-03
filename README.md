@@ -158,7 +158,7 @@ Search for gadgets that contain double jumps.
 ![Double Jump](./img/double.png)
 
 ## Epilogue
-Find gadgets the give control of saved registers.
+Find gadgets that give control of saved registers.
 
 ![User Input](./img/epilogue_input.png)
 
