@@ -1,20 +1,20 @@
-# Find MIPS ROP gadgets that contain a user specified instruction.
+# Find ARM ROP gadgets that contain a user specified instruction.
 #@author fuzzywalls
 #@category TNS
-#@menupath TNS.Mips Rops.Find
+#@menupath TNS.Arm Rop.Find
 
 
 import re
-from utils import mipsrop, utils
+from utils import armrop, utils
 
-utils.allowed_processors(currentProgram, 'MIPS')
+utils.allowed_processors(currentProgram, 'ARM')
 
 op1 = None
 op2 = None
 op3 = None
 
 search = askString(
-    'MIPS ROP Find', 'What instruction do you want to search for?')
+    'ARM ROP Find', 'What instruction do you want to search for?')
 try:
     search = re.sub(' +', ' ', search)
     mnem, operands = search.split(' ', 1)
@@ -27,9 +27,10 @@ except ValueError:
 if not mnem.startswith('.*'):
     mnem = '.*' + mnem
 
-search_ins = mipsrop.MipsInstruction(mnem, op1, op2, op3)
+print 'Searching for %s' % search
+search_ins = armrop.ArmInstruction(mnem, op1, op2, op3)
 
-mips_rop = mipsrop.MipsRop(currentProgram)
-results = mips_rop.find_instructions([search_ins])
+arm_rop = armrop.ArmRop(currentProgram)
+results = arm_rop.find_instructions([search_ins])
 
 results.pretty_print()

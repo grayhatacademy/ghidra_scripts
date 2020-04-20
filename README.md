@@ -1,7 +1,7 @@
-Converting IDA Plugins from [devttyS0](https://github.com/devttys0/ida) to 
-Ghidra framework. To install, clone and add the script directory via Ghidra's 
-Script Manager. If you check the 'In Tool' checkbox they will appear under a 
-'TNS' tag. 
+Port of IDA Plugins from [devttyS0](https://github.com/devttys0/ida) to 
+Ghidra framework as well as new plugins. To install, clone and add the script 
+directory via Ghidra's Script Manager. If you check the 'In Tool' checkbox they 
+will appear under a 'TNS' tag. 
 
 # Table Of Contents
 
@@ -25,15 +25,61 @@ Script Manager. If you check the 'In Tool' checkbox they will appear under a
 [Rizzo](#rizzo) - Create fuzzy function signatures that can be applied to other projects.
 
 ## New Scripts
-[Operator](#operator) - Identify calls to functions and the parameters that are provided to the function.
+[ARM Rop Finder](#arm_rop) - Find ROP gadgets in ARM disassembly.
 
 [MIPS Rop Finder](#mips_rop) Prologue Gadget - Find controllable gadgets at the beginning of functions that provide stack pointer movement.
 
 [MIPS Rop Finder](#mips_rop) Epilogue Gadget - Find gadgets that grant control of more saved registers.
 
+[Operator](#operator) - Identify calls to functions and the parameters that are provided to the function.
+
+<a name=arm_rop></a>
+
 ----
 
+# ARM Rop Finder
+Find ROP gadgets in ARM disassembly.
+
+## Find
+Find controllable gadgets that contain custom ARM instructions. Regular 
+expressions are supported. To search for a move to r0 from anything, simply 
+search for 
+"`mov r0,.*`".
+
+![ARM ROP Find](./img/armrop_find.png)
+
+## Register Control
+Find ARM ROP gadgets that give control of registers by popping them off the stack.
+
+![ARM ROP Register Control](./img/armrop_registercontrol.png)
+
+## Register Move
+Find ARM ROP gadgets that move values between registers.
+
+![ARM ROP Register Move](./img/armrop_registermove.png)
+
+## Stack Finder
+Find ARM ROP gadgets that put a stack address in a register. Useful for calling functions with a user controlled string.
+
+![ARM ROP Stack Finder](./img/armrop_stackfinder.png)
+
+## Summary
+Print a summary of gadgets that have been book marked with the string `ropX` 
+where `X` is the gadgets position in the rop chain. 
+
+![Creating a Book mark](./img/bookmark.png)
+
+![ARM Gadget Summary](./img/armrop_summary.png)
+
+## System
+Find ARM ROP gadgets for calling system with a user controlled argument.
+
+![ARM ROP System Gadget](./img/armrop_system.png)
+
+
 <a name=call_chain></a>
+
+----
 
 # Call Chain
 Display the call chain, if it exists, between two functions. The output will 

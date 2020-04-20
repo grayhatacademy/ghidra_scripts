@@ -1,5 +1,7 @@
 import re
+from . import utils
 from ghidra.program.flatapi import FlatProgramAPI
+from ghidra.program.model.symbol import DataRefType
 
 
 format_string = '| {:12} | {:12} | {:30} | {:12} | {:30} |'
@@ -7,9 +9,9 @@ format_double_string = '| {:12} | {:30} | {:12} | {:30} | {:12} | {:30} | {:12} 
 summary_format = '| {:15} | {:14} | {:30} |'
 
 
-class MipsInstruction(object):
+class ArmInstruction(object):
     """
-    Class to represent a MIPS Instruction.
+    Class to represent an ARM Instruction.
     """
 
     def __init__(self, mnem, op1=None, op2=None, op3=None):
@@ -19,7 +21,7 @@ class MipsInstruction(object):
         self.op3 = op3
 
 
-class MipsRop(object):
+class ArmRop(object):
     def __init__(self, program):
         self._flat_api = FlatProgramAPI(program)
         self._currentProgram = program
@@ -62,45 +64,8 @@ class MipsRop(object):
         for call in search_calls:
             rop = self._find_instruction(
                 call, instructions, preserve_register, overwrite_register)
-            if rop:
+            if rop and self._is_valid_action(call, rop):
                 gadgets.append(RopGadget(rop, call))
-
-        return gadgets
-
-    def find_doubles(self):
-        """
-        Find double jumps.
-
-        :returns: List of double jump gadgets.
-        :rtype: DoubleGadgets
-        """
-        controllable = self.controllable_calls + \
-            self.controllable_terminating_calls
-
-        gadgets = DoubleGadgets()
-        for i, call in enumerate(controllable):
-            for j in range(i + 1, len(controllable)):
-                second_call = controllable[j]
-                second_call_addr = second_call.control_instruction.getAddress()
-                distance = second_call_addr.subtract(call.call.getAddress())
-
-                # Search for a distance of no more than 25 instructions.
-                if 0 < distance <= 100:
-                    # If the jumps are in different functions do not return
-                    # them
-                    func1 = self._flat_api.getFunctionContaining(
-                        second_call.call.getAddress())
-                    func2 = self._flat_api.getFunctionContaining(
-                        call.call.getAddress())
-                    if func1 != func2:
-                        continue
-
-                    if call.get_source_register() == \
-                            second_call.get_source_register():
-                        continue
-
-                    if not self._contains_bad_calls(call, second_call):
-                        gadgets.append(DoubleGadget(call, second_call))
 
         return gadgets
 
@@ -135,19 +100,7 @@ class MipsRop(object):
             closest_jmp = self._find_closest_controllable_jump(
                 bookmark.getAddress())
 
-            if bookmark.getComment().lower().endswith('_d'):
-                next_closest = self._find_closest_controllable_jump(
-                    closest_jmp.call.getAddress())
-                if closest_jmp and next_closest:
-                    # Hack to change the "control" instruction in case the
-                    # bookmark was placed at a different location.
-                    updated_ctrl = self._flat_api.getInstructionAt(
-                        bookmark.getAddress())
-                    closest_jmp.control_instruction = updated_ctrl
-
-                    rop_gadgets.append(DoubleGadget(closest_jmp, next_closest,
-                                                    bookmark.getComment()))
-            elif closest_jmp:
+            if closest_jmp:
                 curr_addr = bookmark.getAddress()
                 curr_ins = self._flat_api.getInstructionAt(curr_addr)
                 rop_gadgets.append(RopGadget(curr_ins, closest_jmp,
@@ -171,7 +124,7 @@ class MipsRop(object):
 
         closest = None
 
-        for jump in controllable[1:]:
+        for jump in controllable:
             jump_function = self._flat_api.getFunctionContaining(
                 jump.call.getAddress())
             if function != jump_function:
@@ -180,9 +133,8 @@ class MipsRop(object):
             if address > jump.control_instruction.getAddress():
                 continue
 
-            # If the address is a jump do not consider it for the closest jump.
             if jump.call.getAddress() == address:
-                continue
+                return jump
 
             if not closest or \
                     jump.control_instruction.getAddress() <= \
@@ -191,8 +143,8 @@ class MipsRop(object):
             else:
                 control_addr = jump.control_instruction.getAddress()
                 closest_distances = closest.control_instruction.getAddress()
-                if control_addr.subtract(closest_distances) > \
-                        control_addr.subtract(address):
+                if control_addr.subtract(address) < \
+                        closest_distances.subtract(address):
                     closest = jump
         return closest
 
@@ -209,9 +161,6 @@ class MipsRop(object):
         for ins in instructions:
             flow_type = ins.getFlowType()
 
-            # jalr t9 and some jr t9 are isCall()
-            # jr ra is isTerminal()
-            # some jr t9 are isJump() && isComputed().
             if flow_type.isCall() or flow_type.isTerminal() or \
                     (flow_type.isJump() and flow_type.isComputed()):
                 current_instruction = self._flat_api.getInstructionAt(
@@ -240,30 +189,13 @@ class MipsRop(object):
         :returns: Controllable call object if controllable, None if not.
         :rtype: ControllableCall or None
         """
-        t9_move = MipsInstruction('.*move', 't9', '[sva][012345678]')
-        ra_load = MipsInstruction('.*lw', 'ra')
+        branch_link = ArmInstruction('blx', '[r][0123456789]')
+        branch_exchange = ArmInstruction('bx', '[r][0123456789]')
+        end = ArmInstruction('ldmia', 'sp*')
 
-        call_from = call_instruction.getOpObjects(0)[0]
-
-        # No need to check the delay slot so start working back up.
-        controllable = None
-        previous_ins = self._get_previous_instruction(call_instruction)
-
-        while previous_ins:
-            # NOPs are handled weirdly, they have no "flow" so just skip it.
-            if 'nop' in str(previous_ins):
-                previous_ins = previous_ins.getPrevious()
-
-            first_op = previous_ins.getOpObjects(0)
-            if len(first_op):
-                dest_reg = first_op[0]
-                if str(dest_reg) == str(call_from):
-                    if instruction_matches(previous_ins,
-                                           [t9_move, ra_load]):
-                        return ControllableCall(call_instruction, previous_ins)
-                    return None
-
-            previous_ins = self._get_previous_instruction(previous_ins)
+        if instruction_matches(call_instruction, [branch_link, branch_exchange, end]):
+            return ControllableCall(call_instruction, call_instruction)
+        return None
 
     def _get_previous_instruction(self, instruction):
         """
@@ -304,13 +236,23 @@ class MipsRop(object):
         """
         overwritten = False
 
-        delay_slot = controllable_call.call.getNext()
-        if instruction_matches(delay_slot, search_instructions):
-            return delay_slot
+        if instruction_matches(controllable_call.call, search_instructions):
+            return controllable_call.call
 
         previous_ins = self._get_previous_instruction(controllable_call.call)
+        function = self._flat_api.getFunctionContaining(
+            controllable_call.call.getAddress())
 
         while previous_ins:
+            # Break if we hit a call or jump.
+            if utils.is_call_instruction(previous_ins) or \
+                    utils.is_jump_instruction(previous_ins):
+                return None
+
+            # Break if we entered a different function.
+            if function != self._flat_api.getFunctionContaining(previous_ins.getAddress()):
+                return None
+
             if 'nop' in str(previous_ins):
                 previous_ins = previous_ins.getPrevious()
 
@@ -329,51 +271,44 @@ class MipsRop(object):
 
             # TODO: Need to see if we passed the point of caring.
             if register_overwritten(previous_ins,
-                                    controllable_call.control_instruction):
+                                    controllable_call.get_control_item()):
                 return None
-
-            if is_jump(previous_ins):
-                return check_delay_slot(previous_ins, search_instructions)
 
             previous_ins = self._get_previous_instruction(previous_ins)
 
         return None
 
-    def _contains_bad_calls(self, first, second):
+    def _is_valid_action(self, controllable_call, action):
         """
-        Search for bad calls between two controllable jumps.
+        Determine if an action is valid for the controllable call. 
 
-        :param first: Controllable call that comes first in memory.
-        :type first: ControllableCall
+        :param controllable_call: Controllable call to search within.
+        :type controllable_call: ControllableCall
 
-        :param second: Controllable call that comes second in memory.
-        :type second ControllableCall
+        :param action: Action to validate.
+        :type action: ghidra.program.model.listing.Instruction
 
-        :returns: True if bad calls are found, False otherwise.
-        :rtype: bool
+        :returns: The matching instruction if found, None otherwise.
+        :rtype: ghidra.program.model.listing.Instruction
         """
-        jump = MipsInstruction('j.*')
-        branch = MipsInstruction('b.*')
+        if controllable_call.call == action:
+            return True
 
-        preserve_reg = str(second.control_instruction.getOpObjects(1)[-1])
-        end_ins = first.call
+        previous_ins = controllable_call.call
+        preserve_reg = action.getOpObjects(0)
+        if preserve_reg:
+            preserve_reg = str(preserve_reg[0])
 
-        previous_ins = self._get_previous_instruction(
-            second.control_instruction)
-
-        while previous_ins.getAddress() > end_ins.getAddress():
+        while previous_ins and previous_ins != action:
             if 'nop' in str(previous_ins):
                 previous_ins = previous_ins.getPrevious()
 
-            if instruction_matches(previous_ins, [jump, branch]):
-                return True
-
             if register_overwritten(previous_ins, preserve_reg):
-                return True
+                return False
 
             previous_ins = self._get_previous_instruction(previous_ins)
 
-        return False
+        return True
 
 
 class ControllableCall(object):
@@ -385,25 +320,16 @@ class ControllableCall(object):
         self.call = instruction
         self.control_instruction = control_instruction
 
-    def get_source_register(self):
-        """
-        Get the controlling source register.
-        """
-        try:
-            return str(self.control_instruction.getOpObjects(1)[-1])
-        except:
-            return None
-
     def get_control_item(self):
         """
         Get string source of the control item. 
         """
-        return self.control_instruction.getDefaultOperandRepresentation(1)
+        return self.control_instruction.getDefaultOperandRepresentation(0)
 
     def control_jump(self):
         """
-        Return string representing the jump. Instead of 'jalr t9' it might 
-        return 'jalr s4' to represent the controlling register.
+#        Return string representing the jump. Instead of 'jalr t9' it might 
+#        return 'jalr s4' to represent the controlling register.
         """
         return '{:10} {}'.format(self.call.getMnemonicString(),
                                  self.get_control_item())
@@ -438,6 +364,13 @@ class RopGadget(object):
                                     self.jump.call.getAddress(),
                                     self.jump.control_jump())
 
+    def get_start(self):
+        control_addr = self.jump.control_instruction.getAddress()
+        action_addr = self.action.getAddress()
+
+        return self.jump.control_instruction \
+            if control_addr < action_addr else self.action
+
     def get_instructions(self):
         """
         Get a list of instructions between the first instruction in the rop
@@ -452,7 +385,7 @@ class RopGadget(object):
 
         instructions.append(start_ins)
         curr_ins = start_ins
-        while curr_ins.getAddress() <= self.jump.call.getAddress():
+        while curr_ins.getAddress() < self.jump.call.getAddress():
             curr_ins = curr_ins.getNext()
             instructions.append(curr_ins)
 
@@ -477,16 +410,19 @@ class RopGadgets(object):
         """
         Print the gadgets in a nice table.
         """
-        if len(self.gadgets):
-            line_len = len(str(self.gadgets[0]))
-            print '-' * line_len
-            print format_string.format(
-                'Gadget Start', 'Action Addr', 'Action', 'Jump Addr', 'Jump')
-            print '-' * line_len
-            for gadget in self.gadgets:
-                print gadget
-            print '-' * line_len
-        print 'Found {} matching gadgets.\n'.format(len(self.gadgets))
+        title = ['Gadget Start', 'Action Addr', 'Action', 'Jump Addr', 'Jump']
+        gadgets = []
+        for gadget in self.gadgets:
+            start = gadget.get_start()
+            data = [start.getAddress(), gadget.action.getAddress(),
+                    gadget.action, gadget.jump.call.getAddress(),
+                    gadget.jump.control_jump()]
+            data = map(str, data)
+            gadgets.append(data)
+
+        if gadgets:
+            utils.table_pretty_print(title, gadgets)
+        print 'Found %d matching gadgets.' % len(gadgets)
 
     def print_summary(self):
         """
@@ -511,72 +447,6 @@ class RopGadgets(object):
             print 'No bookmarks with "rop" found.'
 
 
-class DoubleGadget(object):
-    """
-    Class to contain double jump gadget.
-    """
-
-    def __init__(self, first, second, name=None):
-        self.first = first
-        self.second = second
-        self.name = name
-
-    def __str__(self):
-        return format_double_string.format(
-            self.first.control_instruction.getAddress(),
-            self.first.control_instruction,
-            self.first.call.getAddress(), self.first.control_jump(),
-            self.second.control_instruction.getAddress(),
-            self.second.control_instruction,
-            self.second.call.getAddress(),
-            self.second.control_jump())
-
-    def get_instructions(self):
-        """
-        Get a list of instructions between the first instruction in the rop
-        and the call.
-        """
-        instructions = []
-
-        # Find the higher call, the action or the control instruction.
-        start_ins = self.first.control_instruction if self.first.control_instruction.getAddress() \
-            < self.first.call.getAddress() else self.first.call
-
-        instructions.append(start_ins)
-        curr_ins = start_ins
-        while curr_ins.getAddress() <= self.second.call.getAddress():
-            curr_ins = curr_ins.getNext()
-            instructions.append(curr_ins)
-
-        return instructions
-
-
-class DoubleGadgets(RopGadgets):
-    """
-    Class to contain double jump gadget.
-    """
-
-    def __init__(self):
-        self.gadgets = []
-        super(DoubleGadgets, self).__init__()
-
-    def pretty_print(self):
-        """
-        Print gadgets in a nice table.
-        """
-        if len(self.gadgets):
-            line_len = len(str(self.gadgets[0]))
-            print '-' * line_len
-            print format_double_string.format(
-                'Gadget Start', '1st Action', 'Address', '1st Jump', 'Address',
-                '2nd Action', 'Address', '2nd Jump')
-            print '-' * line_len
-            for gadget in self.gadgets:
-                print gadget
-            print '-' * line_len
-        print 'Found {} matching gadgets.\n'.format(len(self.gadgets))
-
-
 def instruction_matches(ins, matches):
     """
     Does instruction match any from a list of given instructions.
@@ -594,19 +464,28 @@ def instruction_matches(ins, matches):
         if not re.match(match.mnem, ins.getMnemonicString()):
             continue
         try:
-            if match.op1 and \
-                    not re.match(match.op1, str(ins.getOpObjects(0)[0])):
-                continue
+            _, ops = str(ins).split(' ', 1)
+            if match.op1:
+                if ',' in ops:
+                    first_op, ops = ops.split(',', 1)
+                else:
+                    first_op = ops
+                if not re.match(match.op1, first_op.strip()):
+                    continue
 
-            if match.op2 and \
-                    not re.match(match.op2, str(ins.getOpObjects(1)[0])):
-                continue
+                if match.op2:
+                    if ',' in ops:
+                        second_op, ops = ops.split(',', 1)
+                    else:
+                        second_op = ops
+                    if not re.match(match.op2, second_op.strip()):
+                        continue
 
-            if match.op3 and \
-                    not re.match(match.op3, str(ins.getOpObjects(2)[0])):
-                continue
+                    if match.op3 and \
+                            not re.match(match.op3, ops.strip()):
+                        continue
             return True
-        except IndexError:
+        except ValueError as e:
             continue
         return False
 
@@ -625,34 +504,15 @@ def register_overwritten(ins, register):
     :rtype: bool
     """
     objects = ins.getOpObjects(0)
+    ref_type = ins.getOperandRefType(0)
     if objects and str(objects[0]) == register:
-        return True
+        if ref_type and ref_type in [DataRefType.WRITE, DataRefType.READ_WRITE]:
+            return True
+    elif not ref_type:
+        # Some ldmia do not report operand ref type so see if the register
+        # in question appears in the results objects.
+        result_objects = ins.getResultObjects()
+        results = [str(result) for result in result_objects]
+        if register in results:
+            return True
     return False
-
-
-def is_jump(ins):
-    """
-    Is instruction a jump (or call).
-
-    :param ins: Instruction to inspect.
-    :type ins: ghidra.program.model.listing.Instruction
-
-    :returns: True if instruction is a jump, False otherwise.
-    """
-    return ins.getFlowType().isCall() or ins.getFlowType().isJump()
-
-
-def check_delay_slot(ins, matches):
-    """
-    Check delay slot of an instruction that matches the provided instructions. 
-
-    :param ins: Instruction to inspect delay slot for.
-    :type ins: ghidra.program.model.listing
-
-    :param matches: List of instructions to search.
-    :ins matches: list(MipsInstruction)
-    """
-    next_ins = ins.getNext()
-    if instruction_matches(next_ins, matches):
-        return next_ins
-    return None

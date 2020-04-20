@@ -41,6 +41,23 @@ def is_call_instruction(instruction):
     return flow_type.isCall()
 
 
+def is_jump_instruction(instruction):
+    """
+    Determine if instruction is a jump.
+
+    :param instruction: Instruction to inspect.
+    :type instruction: ghidra.program.model.listing.Instruction
+
+    :returns: True if the instruction is a jump, false otherwise.
+    :rtype: bool
+    """
+    if not instruction:
+        return False
+
+    flow_type = instruction.getFlowType()
+    return flow_type.isJump()
+
+
 def get_processor(current_program):
     """
     Get string representing the current programs processor.
@@ -97,3 +114,52 @@ def allowed_processors(current_program, processor_list):
         print '%s is not a valid processor for this script. Supported ' \
             'processors are: %s' % (curr_processor, processor_list)
         exit(1)
+
+
+def table_pretty_print(title, entries):
+    """
+    Print a simple table to the terminal.
+
+    :param title: Title of the table.
+    :type title: list
+
+    :param entries: Entries to print in the table.
+    :type entries: list(list(str))
+    """
+    # Pad entries to be the same length
+    entries = [entry + ([''] * (len(title) - len(entry))) for entry in entries]
+    lines = [title] + entries
+
+    # Find the largest entry in each column so it can be used later
+    # for the format string. Drop title entries if an entire column is empty.
+    max_line_len = []
+    for i in range(0, len(title)):
+        column_lengths = [len(line[i]) for line in lines]
+        if sum(column_lengths[1:]) == 0:
+            title = title[:i]
+            break
+        max_line_len.append(max(column_lengths))
+
+    # Account for largest entry, spaces, and '|' characters on each line.
+    separator = '=' * (sum(max_line_len) + (len(title) * 3) + 1)
+    spacer = '|'
+    format_specifier = '{:<{width}}'
+
+    # First block prints the title and '=' characters to make a title
+    # border
+    print separator
+    print spacer,
+    for width, column in zip(max_line_len, title):
+        print format_specifier.format(column, width=width),
+        print spacer,
+    print ''
+    print separator
+
+    # Print the actual entries.
+    for entry in entries:
+        print spacer,
+        for width, column in zip(max_line_len, entry):
+            print format_specifier.format(column, width=width),
+            print spacer,
+        print ''
+    print separator
