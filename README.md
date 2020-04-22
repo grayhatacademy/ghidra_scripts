@@ -59,7 +59,7 @@ Find ARM ROP gadgets that move values between registers.
 ![ARM ROP Register Move](./img/armrop_registermove.png)
 
 ## Stack Finder
-Find ARM ROP gadgets that put a stack address in a register. Useful for calling functions with a user controlled string.
+Find ARM ROP gadgets that put a stack address in a register. Useful for finding shell code and strings on the stack.
 
 ![ARM ROP Stack Finder](./img/armrop_stackfinder.png)
 
