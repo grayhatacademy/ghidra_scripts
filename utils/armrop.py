@@ -358,7 +358,7 @@ class RopGadget(object):
         start = self.jump.control_instruction \
             if control_addr < action_addr else self.action
 
-        return format_string.format(start.getAddress(),
+        return format_string.format(start,
                                     self.action.getAddress(),
                                     self.action,
                                     self.jump.call.getAddress(),
@@ -368,8 +368,13 @@ class RopGadget(object):
         control_addr = self.jump.control_instruction.getAddress()
         action_addr = self.action.getAddress()
 
-        return self.jump.control_instruction \
+        start = self.jump.control_instruction \
             if control_addr < action_addr else self.action
+
+        if len(start.getBytes()) == 4:
+            return start.getAddress()
+        else:
+            return '%s + 1 = %s' % (start.getAddress(), start.getAddress().add(1))
 
     def get_instructions(self):
         """
@@ -414,7 +419,7 @@ class RopGadgets(object):
         gadgets = []
         for gadget in self.gadgets:
             start = gadget.get_start()
-            data = [start.getAddress(), gadget.action.getAddress(),
+            data = [start, gadget.action.getAddress(),
                     gadget.action, gadget.jump.call.getAddress(),
                     gadget.jump.control_jump()]
             data = map(str, data)
