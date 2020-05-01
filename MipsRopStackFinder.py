@@ -1,7 +1,7 @@
 # Find MIPS ROP gadgets that put a stack address in a register.
 #@author fuzzywalls
 #@category TNS
-#@menupath TNS.Mips Rops.Stack Finder
+#@menupath TNS.Mips Rops.Gadgets.Stack Finder
 
 
 from utils import mipsrop, utils

@@ -1,7 +1,7 @@
 # Find MIPS ROP gadgets near the beginning of functions that allow for stack pointer movement.
 #@author fuzzywalls
 #@category TNS
-#@menupath TNS.Mips Rops.Prologue
+#@menupath TNS.Mips Rops.Gadgets.Prologue
 
 
 from utils import mipsrop, utils

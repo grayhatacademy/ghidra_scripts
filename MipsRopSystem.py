@@ -1,7 +1,7 @@
 # Find MIPS ROP gadgets for calling system with a user controlled argument.
 #@author fuzzywalls
 #@category TNS
-#@menupath TNS.Mips Rops.System Calls
+#@menupath TNS.Mips Rops.Gadgets.System Calls
 
 
 from utils import mipsrop, utils

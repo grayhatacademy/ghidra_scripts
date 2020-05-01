@@ -27,6 +27,8 @@ will appear under a 'TNS' tag.
 ## New Scripts
 [ARM Rop Finder](#arm_rop) - Find ROP gadgets in ARM disassembly.
 
+[MIPS Rop Finder](#mips_rop) Shellcode Chain - Build a ROP chain to call shellcode on MIPS systems.
+
 [MIPS Rop Finder](#mips_rop) Prologue Gadget - Find controllable gadgets at the beginning of functions that provide stack pointer movement.
 
 [MIPS Rop Finder](#mips_rop) Epilogue Gadget - Find gadgets that grant control of more saved registers.
@@ -256,6 +258,29 @@ Find gadgets that load a small value into a0. Useful for calling sleep.
 Find controllable gadgets at the beginning of functions that provide stack pointer movement.
 
 ![Prologue Result](./img/prologue.png)
+
+
+## Shellcode ROP Chain
+Build rop chain to call shellcode. Chain is built off user intput and attempts
+to build the shortest chain. Multiple chains can be requested if the first
+is not suitable. If not enough registers are controlled a gadget to gain control
+of more register will be used first in the chain.
+
+![Shellcode Options](./img/shellcode_options.png)
+
+- Avoid indirect returns
+    - Avoid using gadgets that perform jumps to t9 in an epilogue but return to t9. Avoids stack movement.
+- Avoid double jumps
+    - Avoid gadgets that perform back to back jumps.
+- Avoid gadgets that require a control jump
+    - If a gadget jumps by controlling an 'a' or 'v' register a gadget will be added to get control of this register. Click this to avoid those types of gadgets.
+- Do not reuse gadgets
+    - Prevents some gadget reuse. Spices up the results a little bit, but you may not get the shortest chain.
+- Verbose Output
+    - Print all the outputs.
+
+![Shellcode Chain](./img/shellcode_chain.png)
+
 
 ## Stack Finder
 Find gadgets that place a stack address in a register.

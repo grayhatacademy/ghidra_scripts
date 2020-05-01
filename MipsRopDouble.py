@@ -1,7 +1,7 @@
-#
+# Find MIPS ROP gadgets that perform two controllable jumps.
 #@author fuzzywalls
 #@category TNS
-#@menupath TNS.Mips Rops.Double Jumps
+#@menupath TNS.Mips Rops.Gadgets.Double Jumps
 
 
 from utils import mipsrop, utils

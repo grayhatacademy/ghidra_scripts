@@ -1,7 +1,7 @@
 # Find MIPS ROP gadgets that contain a user specified instruction.
 #@author fuzzywalls
 #@category TNS
-#@menupath TNS.Mips Rops.Find
+#@menupath TNS.Mips Rops.Gadgets.Find
 
 
 import re

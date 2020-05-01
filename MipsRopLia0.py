@@ -1,7 +1,7 @@
 # Find MIPS ROP gadgets that load a small value into a0. Useful for calling sleep.
 #@author fuzzywalls
 #@category TNS
-#@menupath TNS.Mips Rops.Li a0
+#@menupath TNS.Mips Rops.Gadgets.Li a0
 
 
 from utils import mipsrop, utils

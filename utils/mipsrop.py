@@ -46,7 +46,7 @@ class MipsRop(object):
         :type terminating_calls: bool
 
         :param overwrite_register: Register to ensure is overwritten.
-        :param overwrite_register: str
+        :type overwrite_register: str or list(str)
 
         :returns: List of rop gadgets that contain the provided instructions.
         :rtype: list(RopGadgets)
@@ -97,6 +97,10 @@ class MipsRop(object):
 
                     if call.get_source_register() == \
                             second_call.get_source_register():
+                        continue
+
+                    if call in self.controllable_terminating_calls and \
+                            second_call in self.controllable_terminating_calls:
                         continue
 
                     if not self._contains_bad_calls(call, second_call):
@@ -297,12 +301,12 @@ class MipsRop(object):
         :type preserve_reg: str
 
         :param overwrite_reg: Enforce a register was overwritten.
-        :type overwrite_reg: str
+        :type overwrite_reg: str or list(str)
 
         :returns: The matching instruction if found, None otherwise.
         :rtype: ghidra.program.model.listing.Instruction
         """
-        overwritten = False
+        registers_to_overwrite = overwrite_reg[:] if overwrite_reg else []
 
         delay_slot = controllable_call.call.getNext()
         if instruction_matches(delay_slot, search_instructions):
@@ -315,7 +319,7 @@ class MipsRop(object):
                 previous_ins = previous_ins.getPrevious()
 
             if instruction_matches(previous_ins, search_instructions):
-                if overwrite_reg and not overwritten:
+                if overwrite_reg and registers_to_overwrite:
                     return None
                 return previous_ins
 
@@ -323,14 +327,20 @@ class MipsRop(object):
                     register_overwritten(previous_ins, preserve_reg):
                 return None
 
-            if overwrite_reg and register_overwritten(previous_ins,
-                                                      overwrite_reg):
-                overwritten = True
+            if overwrite_reg:
+                overwritten = register_overwritten(previous_ins,
+                                                   overwrite_reg)
+                if overwritten:
+                    try:
+                        registers_to_overwrite.remove(overwritten)
+                    except ValueError:  # Don't care if it's not in the list
+                        pass
 
             # TODO: Need to see if we passed the point of caring.
-            if register_overwritten(previous_ins,
-                                    controllable_call.control_instruction):
-                return None
+            # Commented out b/c it kills IRETs. Investigate more later.
+#            if register_overwritten(previous_ins,
+#                                    controllable_call.get_source_register()):
+#                return None
 
             if is_jump(previous_ins):
                 return check_delay_slot(previous_ins, search_instructions)
@@ -424,6 +434,7 @@ class RopGadget(object):
         self.action = action
         self.jump = jump
         self.name = name
+        self.instructions = []
 
     def __str__(self):
         control_addr = self.jump.control_instruction.getAddress()
@@ -438,25 +449,76 @@ class RopGadget(object):
                                     self.jump.call.getAddress(),
                                     self.jump.control_jump())
 
+    def __len__(self):
+        return len(self.get_instructions())
+
+    def get_action_destination_register(self):
+        """
+        Get the action destination register.
+
+        :returns: Destination register as a string.
+        :rtype: str
+        """
+        try:
+            return str(self.action.getOpObjects(0)[0])
+        except:
+            return None
+
+    def get_action_source_register(self):
+        """
+        Get the action source register.
+
+        :returns: Source register as a string.
+        :rtype: str
+        """
+        try:
+            return str(self.action.getOpObjects(1)[0])
+        except:
+            return None
+
+    def print_instructions(self):
+        """
+        Print instructions in the register.
+        """
+        instruction_list = self.get_instructions()
+        for instruction in instruction_list:
+            print '%s : %s' % (instruction.getAddress(), instruction)
+
+    def overwrites_register(self, register):
+        """
+        Determine if the gadget overwrites a register.
+
+        :param register: Register to check.
+        :type register: str 
+
+        :returns: True if register is overwritten, False otherwise.
+        """
+        instruction_list = self.get_instructions()
+        for instruction in instruction_list:
+            if register_overwritten(instruction, register):
+                return True
+        return False
+
     def get_instructions(self):
         """
         Get a list of instructions between the first instruction in the rop
         and the call.
         """
-        instructions = []
+        if self.instructions:
+            return self.instructions
 
         # Find the higher call, the action or the control instruction.
         start_ins = self.action if self.action.getAddress() \
             < self.jump.control_instruction.getAddress() else \
             self.jump.control_instruction
 
-        instructions.append(start_ins)
+        self.instructions.append(start_ins)
         curr_ins = start_ins
         while curr_ins.getAddress() <= self.jump.call.getAddress():
             curr_ins = curr_ins.getNext()
-            instructions.append(curr_ins)
+            self.instructions.append(curr_ins)
 
-        return instructions
+        return self.instructions
 
 
 class RopGadgets(object):
@@ -520,6 +582,7 @@ class DoubleGadget(object):
         self.first = first
         self.second = second
         self.name = name
+        self.instructions = []
 
     def __str__(self):
         return format_double_string.format(
@@ -531,24 +594,49 @@ class DoubleGadget(object):
             self.second.call.getAddress(),
             self.second.control_jump())
 
+    def __len__(self):
+        return len(self.get_instructions())
+
+    def print_instructions(self):
+        """
+        Print instructions in the gadget.
+        """
+        instruction_list = self.get_instructions()
+        for instruction in instruction_list:
+            print '%s : %s' % (instruction.getAddress(), instruction)
+
+    def overwrites_register(self, register):
+        """
+        Determine if a register is overwritten in the gadget.
+
+        :returns True if the register is overwritten, False otherwise.
+        :rtype: bool
+        """
+        instruction_list = self.get_instructions()
+        for instruction in instruction_list:
+            if register_overwritten(instruction, register):
+                return True
+        return False
+
     def get_instructions(self):
         """
         Get a list of instructions between the first instruction in the rop
         and the call.
         """
-        instructions = []
+        if self.instructions:
+            return self.instructions
 
         # Find the higher call, the action or the control instruction.
         start_ins = self.first.control_instruction if self.first.control_instruction.getAddress() \
             < self.first.call.getAddress() else self.first.call
 
-        instructions.append(start_ins)
+        self.instructions.append(start_ins)
         curr_ins = start_ins
         while curr_ins.getAddress() <= self.second.call.getAddress():
             curr_ins = curr_ins.getNext()
-            instructions.append(curr_ins)
+            self.instructions.append(curr_ins)
 
-        return instructions
+        return self.instructions
 
 
 class DoubleGadgets(RopGadgets):
@@ -611,23 +699,50 @@ def instruction_matches(ins, matches):
         return False
 
 
-def register_overwritten(ins, register):
+def register_overwritten(ins, registers):
     """
     Check if a register is overwritten in an instruction.
 
     :param ins: Instruction to inspect.
     :type ins: ghidra.program.model.listing.Instruction
 
-    :param register: Register to search for.
-    :type register: str
+    :param registers: Register or list of registers to search for.
+    :type registers: str or list(str)
 
-    :returns: True if overwritten, False otherwise.
-    :rtype: bool
+    :returns: Register that is overwritten or None
+    :rtype: str or None
     """
-    objects = ins.getOpObjects(0)
-    if objects and str(objects[0]) == register:
-        return True
-    return False
+    if not isinstance(registers, list):
+        registers = [registers]
+
+    index = 0
+    if 'sw' in str(ins):
+        index = 1
+    objects = ins.getOpObjects(index)
+    if objects:
+        for register in registers:
+            if str(objects[0]) == register:
+                return register
+    return None
+
+
+def get_overwritten_register(ins):
+    """
+    Return registers overwritten in the instruction.
+
+    :param ins: Instruction to search 
+    :type ins: ghidra.program.model.listing.Instruction
+
+    :returns: Overwritten register or None.
+    :rtype: str or None
+    """
+    index = 0
+    if 'sw' in str(ins):
+        index = 1
+    objects = ins.getOpObjects(index)
+    if objects:
+        return str(objects[index])
+    return None
 
 
 def is_jump(ins):
@@ -639,7 +754,8 @@ def is_jump(ins):
 
     :returns: True if instruction is a jump, False otherwise.
     """
-    return ins.getFlowType().isCall() or ins.getFlowType().isJump()
+    flow = ins.getFlowType()
+    return flow.isCall() or flow.isJump() or flow.isTerminal()
 
 
 def check_delay_slot(ins, matches):
