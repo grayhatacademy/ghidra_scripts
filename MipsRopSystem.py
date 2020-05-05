@@ -11,6 +11,7 @@ utils.allowed_processors(currentProgram, 'MIPS')
 set_a0 = mipsrop.MipsInstruction('.*addiu', 'a0', 'sp')
 
 mips_rop = mipsrop.MipsRop(currentProgram)
-system_rops = mips_rop.find_instructions([set_a0], 'a0')
+system_rops = mips_rop.find_instructions([set_a0], 'a0',
+                                         terminating_calls=False)
 
 system_rops.pretty_print()
