@@ -21,27 +21,27 @@ Script to find and support finding ARM ROP gadgets.
     - Convert entire program to Thumb instructions. 
     - List summary of saved gadgets.
 
-#[Call Chain](readmes/callchain.md)
+# [Call Chain](readmes/callchain.md)
 Find call chains between two user specified functions. Results are displayed in a png.
 
-#[Codatify](readmes/codatify.md) 
+# [Codatify](readmes/codatify.md) 
 - Fixup code - defines all undefined data in the .text section as code and creates a function if it can.
 - Fixup data - define uninitialized strings and pointers. Searches for function tables and renames functions based on their discovery. 
 
-#[Fluorescence](readmes/fluorescence.md)
+# [Fluorescence](readmes/fluorescence.md)
 Highlight function calls.
 
-#[Function Profiler](readmes/func_profiler.md)
+# [Function Profiler](readmes/func_profiler.md)
 Display cross refs from the current function.
 
-#[Leaf Blower](readmes/leafblower.md)
+# [Leaf Blower](readmes/leafblower.md)
 - Format Strings - Find functions that accept format strings as parameters.
 - Leaf Functions - Identify potential leaf functions such as strcpy, strlen, etc.
 
-#[Local Cross References](readmes/local_cross_ref.md)
+# [Local Cross References](readmes/local_cross_ref.md)
 Find references to items in the current function.
 
-#[MIPS ROP Finder](readmes/mips_rop.md)
+# [MIPS ROP Finder](readmes/mips_rop.md)
 Scripts to find and support finding MIPS ROP gadgets.
 
 - Gadgets
@@ -60,12 +60,12 @@ Scripts to find and support finding MIPS ROP gadgets.
 - Support
     - Summary
 
-#[Operator](readmes/operator.md)
+# [Operator](readmes/operator.md)
 Display all calls to a function and identify the source of the parameters it is called with taking variadic arguments into account if they are present.
 
-#[Rename Variables](readmes/rename_variables.md)
+# [Rename Variables](readmes/rename_variables.md)
 Rename saved stack variables. (MIPS only)
 
-#[Rizzo](readmes/rizzo.md)
+# [Rizzo](readmes/rizzo.md)
 Create fuzzy function signatures that can be applied to other projects.
 
