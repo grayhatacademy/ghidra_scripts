@@ -312,6 +312,10 @@ class MipsRop(object):
         if instruction_matches(delay_slot, search_instructions):
             return delay_slot
 
+        if preserve_reg and \
+                register_overwritten(delay_slot, preserve_reg):
+            return None
+
         previous_ins = self._get_previous_instruction(controllable_call.call)
 
         while previous_ins:
@@ -456,25 +460,25 @@ class RopGadget(object):
         """
         Get the action destination register.
 
-        :returns: Destination register as a string.
-        :rtype: str
+        :returns: Destination register as a list of strings.
+        :rtype: list(str)
         """
         try:
-            return str(self.action.getOpObjects(0)[0])
+            return [str(self.action.getOpObjects(0)[0])]
         except:
-            return None
+            return []
 
     def get_action_source_register(self):
         """
         Get the action source register.
 
-        :returns: Source register as a string.
-        :rtype: str
+        :returns: Source register as a list of strings.
+        :rtype: list(str)
         """
         try:
-            return str(self.action.getOpObjects(1)[0])
+            return [str(self.action.getOpObjects(1)[0])]
         except:
-            return None
+            return []
 
     def print_instructions(self):
         """
@@ -637,6 +641,37 @@ class DoubleGadget(object):
             self.instructions.append(curr_ins)
 
         return self.instructions
+
+    def get_action_destination_register(self):
+        """
+        Get the action destination register.
+
+        :returns: Destination register as a list of strings.
+        :rtype: list(str)
+        """
+        dest = []
+        try:
+            dest.append(str(self.first.control_instruction.getOpObjects(0)[0]))
+            dest.append(
+                str(self.second.control_instruction.getOpObjects(0)[0]))
+        except:
+            return []
+        return dest
+
+    def get_action_source_register(self):
+        """
+        Get the action source register.
+
+        :returns: Source registers as a list of strings.
+        :rtype: list(str)
+        """
+        src = []
+        try:
+            src.append(str(self.first.control_instruction.getOpObjects(1)[0]))
+            src.append(str(self.second.control_instruction.getOpObjects(1)[0]))
+        except:
+            return []
+        return src
 
 
 class DoubleGadgets(RopGadgets):

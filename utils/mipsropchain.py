@@ -1,10 +1,65 @@
 from . import mipsrop, utils
+import time
 
 REGISTERS = ['s0', 's1', 's2', 's3', 's4', 's5', 's6', 's7', 's8']
 
 
+def update_available_registers(registers, gadget):
+    """
+    Update available registers list based on what gadget does.
+
+    :param registers: List of currently controlled registers.
+    :type registers: list(str)
+
+    :param gadget: Current gadget.
+    :type gadget: GadgetChain
+
+    :returns: New list of available registers.
+    :rtype: list(str)
+    """
+    new_registers = registers[:]
+
+    try:
+        for jump in gadget.jump_register:
+            if 'sp' not in jump:
+                new_registers.remove(jump)
+    except ValueError:
+        return []
+
+    for reg in gadget.overwritten:
+        try:
+            new_registers.remove(reg)
+        except ValueError:
+            pass
+
+    for reg in gadget.control_gained:
+        if reg not in registers:
+            new_registers.append(reg)
+    return new_registers
+
+
 def get_chain_length(chain):
+    """
+    Get instruction length of a chain.
+
+    :param chain: Gadget chain.
+    :type chain: list(GadgetLinks)
+    """
     return sum(map(len, chain))
+
+
+def default_gadget_search(link, controlled_registers, current_chain):
+    """
+    Default search for finding gadgets in a chain. Chooses based on jump
+    being controlled by registers that are controlled.
+    """
+    for jump in link.jump_register:
+        if 'sp' in jump:
+            continue
+
+        if jump not in controlled_registers:
+            return False
+    return True
 
 
 class ChainLink(object):
@@ -40,9 +95,9 @@ class ChainLink(object):
                     gadget.second.control_instruction.getAddress()
         else:
             if control_gadget:
-                control_reg = control_gadget.get_action_source_register()
-                action_reg = gadget.get_action_destination_register()
-                control_jump = control_gadget.get_action_source_register()
+                control_reg = control_gadget.get_action_source_register()[0]
+                action_reg = gadget.get_action_destination_register()[0]
+                control_jump = control_gadget.get_action_source_register()[0]
                 gadget_jump = control_gadget.jump.get_control_item()
 
                 self.action_register[control_reg] = \
@@ -59,7 +114,7 @@ class ChainLink(object):
                 self.chain.append(control_gadget)
             else:
                 gadget_jump = gadget.jump.get_control_item()
-                action = gadget.get_action_source_register()
+                action = gadget.get_action_source_register()[0]
                 self.jump_register[gadget_jump] = \
                     gadget.jump.control_instruction.getAddress()
                 self.action_register[action] = gadget.action.getAddress()
@@ -90,9 +145,18 @@ class ChainLink(object):
         """
         for register in self.overwritten.keys():
             if register in self.jump_register.keys():
-                if self.jump_register[register] < self.overwritten[register]:
-                    continue
-                raise ValueError
+                for overwritten in self.overwritten[register]:
+                    if self.jump_register > overwritten:
+                        raise ValueError
+
+            # Make sure the action isn't overwritten in the gadget.
+            action_dest = self.get_action_destination()
+            if register in action_dest:
+                for overwritten in self.overwritten[register]:
+                    action_addr = self.action_register.values()
+                    for addr in action_addr:
+                        if addr != overwritten:
+                            raise ValueError
 
     def _get_registers_overwritten(self, gadget):
         """
@@ -101,9 +165,12 @@ class ChainLink(object):
         instructions = gadget.get_instructions()
         for instruction in instructions:
             reg = mipsrop.get_overwritten_register(instruction)
-            if reg and reg in REGISTERS + ['a0', 'a1', 'a2', 'a3', 'sp']:
+            if reg and reg in REGISTERS + ['a0', 'a1', 'a2', 'a3', 'sp', 'v0', 'v1']:
+                address = instruction.getAddress()
                 if reg not in self.overwritten:
-                    self.overwritten[reg] = instruction.getAddress()
+                    self.overwritten[reg] = [address]
+                else:
+                    self.overwritten[reg].append(address)
                 if reg in self.control_gained:
                     self.control_gained.pop(reg)
                 if 'lw' in str(instruction) and 'sp' in str(instruction):
@@ -118,6 +185,14 @@ class ChainLink(object):
         :returns: Action destination register. 
         """
         return self._gadget.get_action_destination_register()
+
+    def get_action_source(self):
+        """
+        Get the action source register.
+        """
+        if self._control_gadget:
+            return self._control_gadget.get_action_source_register()
+        return self._gadget.get_action_source_register()
 
     def print_gadget(self, extended=False):
         """
@@ -156,11 +231,11 @@ class ChainLink(object):
 
 class GadgetLinks(object):
     def __init__(self, name, rop_finder, gadgets, check_control=True,
-                 destination_generation=False):
+                 find_fn=default_gadget_search):
         self.name = name
         self._rop_finder = rop_finder
         self._links = gadgets
-        self.destination_generation = destination_generation
+        self._find_fn = find_fn
         self.chains = []
 
         for gadget in self._links:
@@ -169,8 +244,10 @@ class GadgetLinks(object):
             except ValueError:
                 continue
 
-            jump_reg = gadget_chain.jump_register.keys()
-            if check_control and jump_reg[0] not in REGISTERS and 'sp' not in jump_reg:
+            jump_reg = gadget_chain.jump_register.keys()[0]
+            if not isinstance(gadget, mipsrop.DoubleGadget) and \
+                    check_control and jump_reg not in REGISTERS and \
+                    'sp' not in jump_reg:
                 control_links = self._find_control_jump(jump_reg[0])
                 for control in control_links:
                     try:
@@ -194,9 +271,9 @@ class GadgetLinks(object):
         control = self._rop_finder.find_instructions([ins])
         return control.gadgets
 
-    def find_gadget(self, controlled_registers):
+    def find_gadget(self, controlled_registers, current_chain):
         """
-        Find usable gadgets based on currently controlled registers.
+        Find usable gadgets based on defined find function. 
 
         :param controlled_registers: List of currently controlled registers.
         :type controlled_registers: list(str)
@@ -206,51 +283,9 @@ class GadgetLinks(object):
         """
         gadgets = []
         for gadget in self.chains:
-            add = True
-            for jump in gadget.jump_register:
-                if 'sp' in jump:
-                    continue
-
-                if jump not in controlled_registers:
-                    add = False
-                    break
-            if add:
+            if self._find_fn(gadget, controlled_registers, current_chain):
                 gadgets.append(gadget)
         return gadgets
-
-
-def update_available_registers(registers, gadget):
-    """
-    Update available registers list based on what gadget does.
-
-    :param registers: List of currently controlled registers.
-    :type registers: list(str)
-
-    :param gadget: Current gadget.
-    :type gadget: GadgetChain
-
-    :returns: New list of available registers.
-    :rtype: list(str)
-    """
-    new_registers = registers[:]
-
-    try:
-        for jump in gadget.jump_register:
-            if 'sp' not in jump:
-                new_registers.remove(jump)
-    except ValueError:
-        return []
-
-    for reg in gadget.overwritten:
-        try:
-            new_registers.remove(reg)
-        except ValueError:
-            pass
-
-    for reg in gadget.control_gained:
-        if reg not in registers:
-            new_registers.append(reg)
-    return new_registers
 
 
 class ChainBuilder(object):
@@ -267,7 +302,7 @@ class ChainBuilder(object):
         self.max_chain = 0
 
     def add_gadgets(self, name, gadget, check_control=True,
-                    destination_generation=False, index=None):
+                    find_fn=default_gadget_search, index=None):
         """
         Add new gadget to the chain builder.
 
@@ -275,28 +310,61 @@ class ChainBuilder(object):
         :type name: str
 
         :param gadget: List of available gadgets.
-        :type gadget:
+        :type gadget: list(mipsrop.RopGadget or mipsrop.DoubleGadget)
 
         :param check_control: If the gadget jump is not controllable by a saved
                              register then search for a gadget to gain control.
         :type check_control: bool
 
-        :param destination_generation: Gadget should be chosen based on the action
-                                       of the previous gadget instead of the 
-                                       currently controlled registers.
-        :type destination_generation: bool
+        :param find_fn: Custom find function to use in place of searching by 
+                        currently controlled registers. Function must have 
+                        prototype 
+                        `def function_name(link, controlled_regs, current_chain)` 
+                        and return True is the gadget is usable, False if not. 
+                        See MipsRopSystemChain for example use.
+        :type find_fn: function
 
         :param index: Index to insert gadget. Index dictates it position in the 
                       generated chain.
         :type index: int
         """
         gadget_links = GadgetLinks(
-            name, self._rop_finder, gadget, check_control,
-            destination_generation)
+            name, self._rop_finder, gadget, check_control, find_fn)
         if index is not None:
             self.gadgets.insert(index, gadget_links)
         else:
             self.gadgets.append(gadget_links)
+
+    def replace_gadgets(self, name, gadget, index, check_control=True,
+                        find_fn=default_gadget_search):
+        """
+        Replace a previously added gadget in the chain builder.
+
+        :param name: Name of the gadget. Only used for printing purposes.
+        :type name: str
+
+        :param gadget: List of available gadgets.
+        :type gadget: list(mipsrop.RopGadget or mipsrop.DoubleGadget)
+
+        :param check_control: If the gadget jump is not controllable by a saved
+                             register then search for a gadget to gain control.
+        :type check_control: bool
+
+        :param find_fn: Custom find function to use in place of searching by 
+                        currently controlled registers. Function must have 
+                        prototype 
+                        `def function_name(link, controlled_regs, current_chain)` 
+                        and return True is the gadget is usable, False if not. 
+                        See MipsRopSystemChain for example use.
+        :type find_fn: function
+
+        :param index: Index to insert gadget. Index dictates it position in the 
+                      generated chain.
+        :type index: int
+        """
+        gadget_links = GadgetLinks(
+            name, self._rop_finder, gadget, check_control, find_fn)
+        self.gadgets[index] = gadget_links
 
     def generate_chain(self):
         """
@@ -387,10 +455,8 @@ class ChainBuilder(object):
             return
 
         self.max_chain = max([self.max_chain, len(chain)])
-        available_links = links.find_gadget(registers)
-        if not available_links and self._verbose:
-            print 'No gadgets found with control of %s in %s' % (registers,
-                                                                 links.name)
+
+        available_links = links.find_gadget(registers, chain)
 
         current_chain = chain[:]
         for gadget in available_links:
@@ -402,15 +468,13 @@ class ChainBuilder(object):
 
             current_chain.append(gadget)
             if remaining_links:
-                if remaining_links[0].destination_generation:
-                    register_control = [gadget.get_action_destination()]
-                else:
-                    register_control = update_available_registers(
-                        registers, gadget)
+                register_control = update_available_registers(registers,
+                                                              gadget)
                 self._process_links(
                     remaining_links[0], register_control, remaining_links[1:],
                     current_chain)
             else:  # No remaining links mean the chain is complete.
                 self._add_new_chain(current_chain[:])
-                return
+                if not self._allow_reuse:
+                    return
             current_chain.pop()

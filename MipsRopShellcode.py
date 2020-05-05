@@ -1,7 +1,7 @@
 # Build a ROP chain that can be used to call shellcode.
 #@author fuzzywalls
 #@category TNS
-#@menupath TNS.Mips Rops.ROP Chains.Call Shellcode
+#@menupath TNS.Mips Rops.ROP Chains.Shellcode
 
 from utils import mipsropchain, mipsrop, utils
 
@@ -37,12 +37,12 @@ def find_stack_finders(rop_finder, verbose):
     :rtype: list(mipsrop.RopGadget)
     """
     sf_saved_reg = mipsrop.MipsInstruction('.*addiu', '[sva][012345678]', 'sp')
-    stack_finders = rop_finder.find_instructions(
+    stack_finder_gadgets = rop_finder.find_instructions(
         [sf_saved_reg], terminating_calls=False)
     if verbose:
         print 'Found %d gadgets to find shellcode on the stack.' % \
-            len(stack_finders.gadgets)
-    return stack_finders.gadgets
+            len(stack_finder_gadgets.gadgets)
+    return stack_finder_gadgets.gadgets
 
 
 def find_double_jumps(rop_finder, allow_double=True, allow_iret=True,
@@ -71,6 +71,18 @@ def find_double_jumps(rop_finder, allow_double=True, allow_iret=True,
     return gadgets
 
 
+def custom_shellcode_find(link, controlled_registers, curr_chain):
+    """
+    Custom find to search for gadgets that call a register based on where
+    the previous gadget stored it.
+    """
+    shell_code_location = curr_chain[-1].get_action_destination()[0]
+    for jump in link.jump_register:
+        if jump != shell_code_location:
+            return False
+    return True
+
+
 def find_shellcode_jump(rop_finder, verbose):
     """
     Find gadgets that call a register.
@@ -89,14 +101,16 @@ def find_shellcode_jump(rop_finder, verbose):
     return call_register.gadgets
 
 
-def find_epilogue(rop_finder):
+def find_epilogue(rop_finder, controlled_registers):
     """
-    Find epilogues that grant control of each register. Ideal will return nine
-    gadgets one that gives control of s0, one that gives control of s0 and s1,
-    one that gives control of s0/s1/s2, etc.
+    Find epilogues that grant control of each register. Will only return 
+    epilogues that grant control over more registers than originally used.
 
     :param rop_finder: Mips rop finder class.
     :type rop_finder: mipsrop.MipsRop
+
+    :param controlled_registers: Registers controlled.
+    :type controlled_registers: list(str)
 
     :returns: Gadgets found.
     :rtype: list(mipsrop.RopGadgets)
@@ -105,9 +119,12 @@ def find_epilogue(rop_finder):
     function_epilogue = []
 
     for i in range(0, len(mipsropchain.REGISTERS)):
+        control_registers = mipsropchain.REGISTERS[:i + 1]
+        if all(reg in controlled_registers for reg in control_registers):
+            continue
         epilogue_gadget = rop_finder.find_instructions(
             [epilogue], controllable_calls=False,
-            overwrite_register=mipsropchain.REGISTERS[:i + 1],
+            overwrite_register=control_registers,
             preserve_register=mipsropchain.REGISTERS[i + 1:])
         if epilogue_gadget.gadgets:
             function_epilogue.append(epilogue_gadget.gadgets[0])
@@ -154,14 +171,15 @@ chain_builder.add_gadgets('Load Immediate to a0', lia0, allow_control)
 chain_builder.add_gadgets('Call sleep and maintain control', doubles,
                           allow_control)
 chain_builder.add_gadgets('Shellcode finder', stack_finders, allow_control)
-chain_builder.add_gadgets('Call shellcode', shellcode, False, True)
+chain_builder.add_gadgets('Call shellcode', shellcode,
+                          False, find_fn=custom_shellcode_find)
 chain_builder.generate_chain()
 
 # If no chains were found or not enough add epilogues and keep searching.
 if not chain_builder.chains or len(chain_builder.chains) < chain_count:
     if verbose:
         print 'Adding epilogues to control more registers.'
-    epilogues = find_epilogue(mips_rop)
+    epilogues = find_epilogue(mips_rop, registers_controlled)
     chain_builder.add_gadgets('Control More Registers', epilogues,
                               check_control=False, index=0)
     chain_builder.generate_chain()

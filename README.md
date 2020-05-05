@@ -29,6 +29,8 @@ will appear under a 'TNS' tag.
 
 [MIPS Rop Finder](#mips_rop) Shellcode Chain - Build a ROP chain to call shellcode on MIPS systems.
 
+[MIPS Rop Finder](#mips_rop) System Chain - Build a ROP chain to call system with a controllable string.
+
 [MIPS Rop Finder](#mips_rop) Prologue Gadget - Find controllable gadgets at the beginning of functions that provide stack pointer movement.
 
 [MIPS Rop Finder](#mips_rop) Epilogue Gadget - Find gadgets that grant control of more saved registers.
@@ -280,6 +282,15 @@ of more register will be used first in the chain.
     - Print all the outputs.
 
 ![Shellcode Chain](./img/shellcode_chain.png)
+
+
+## System ROP Chain
+Build rop chain to call system with a controllable string. Chain is built from
+user input and attempts to build the shortest chain using multiple techniques.
+Multiple chains can be requested. If not enough registers are controlled 
+a gadget to gain control of more register will be used first in the chain.
+
+![System Chain](./img/system_chain.png)
 
 
 ## Stack Finder
