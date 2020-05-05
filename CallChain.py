@@ -1,7 +1,7 @@
 # Display call chain graph between two functions and output to the console.
 #@author fuzzywalls
 #@category TNS
-#@menupath TNS.Find Call Chain
+#@menupath TNS.Call Chain
 
 import os
 import sys
@@ -39,13 +39,15 @@ def get_references(caller, callee):
 
     return ref_list
 
+
 def sanitize_dot(func):
     """
     Return a sanitized function name string compatible with DOT representation.
 
     :param func: Function object
     """
-    return str(func).replace("::","\\")
+    return str(func).replace("::", "\\")
+
 
 def print_call_chain(call_chain, dot):
     """
@@ -61,7 +63,7 @@ def print_call_chain(call_chain, dot):
     for function in call_chain:
         references = []
 
-        function_name=sanitize_dot(function)
+        function_name = sanitize_dot(function)
 
         if function == call_chain[0]:
             dot.node(function_name, str(function), style='filled',
@@ -72,7 +74,7 @@ def print_call_chain(call_chain, dot):
         else:
             dot.node(function_name, str(function))
         if previous_function:
-            previous_function_name=sanitize_dot(previous_function)
+            previous_function_name = sanitize_dot(previous_function)
             dot.edge(previous_function_name, function_name)
             function_references[str(previous_function)] = get_references(
                 previous_function, function)
