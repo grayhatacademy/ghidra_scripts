@@ -1,6 +1,12 @@
 # ARM Rop Finder
 Find ROP gadgets in ARM disassembly.
 
+## Double Jump
+Find back to back controllable gadgets in the form of a register jump near
+an epiloge. 
+
+![ARM Rop Double Jumps](./img/arm_rop_double.png)
+
 ## ArmToThumb
 Convert all executable disassembly to Thumb instructions to search for ROP gadgets.
 The output of ROP gadets will account for Thumb instructions and display the jump 
@@ -30,6 +36,12 @@ search for
 "`mov r0,.*`".
 
 ![ARM ROP Find](./img/armrop_find.png)
+
+## Move r0
+Find ARM ROP gadgets that move a small value into r0. Useful for calling sleep
+prior to executing shellcode to flush the buffer to main memory.
+
+![ARM ROP Move r0](./img/arm_rop_mov_r0.png)
 
 ## Register Control
 Find ARM ROP gadgets that give control of registers by popping them off the stack.

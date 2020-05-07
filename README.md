@@ -1,6 +1,6 @@
-Ghidra plugin to support IOT exploitation. Some of the plugins are a port 
+Ghidra scripts to support IOT exploitation. Some of the scripts are a port 
 of [devttyS0](https://github.com/devttys0/ida) IDA plugins and others are 
-new plugins that I found a need for. To install, clone and add the script 
+new scripts that I found a need for. To install, clone and add the script 
 directory via Ghidra's Script Manager. If you check the 'In Tool' checkbox they 
 will appear under a 'TNS' tag. 
 
@@ -11,6 +11,8 @@ Below is a simple overview of the available scripts. If the scripts are broken u
 Script to find and support finding ARM ROP gadgets. 
 
 - Gadgets
+    - Find double jumps.
+    - Move small value to r0.
     - Get control of more or different registers.
     - Move values between registers.
     - Find strings or shellcode on the stack.

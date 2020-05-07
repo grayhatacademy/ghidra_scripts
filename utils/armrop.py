@@ -69,6 +69,38 @@ class ArmRop(object):
 
         return gadgets
 
+    def find_doubles(self):
+        """
+        Find double jumps.
+
+        :returns: List of double jump gadgets.
+        :rtype: DoubleGadgets
+        """
+        controllable = self.controllable_calls
+        terminating = self.controllable_terminating_calls
+
+        gadgets = DoubleGadgets()
+        for call in controllable:
+            for second_call in terminating:
+                second_call_addr = second_call.control_instruction.getAddress()
+                distance = second_call_addr.subtract(call.call.getAddress())
+
+                # Search for a distance of no more than 25 instructions.
+                if 0 < distance <= 100:
+                    # If the jumps are in different functions do not return
+                    # them
+                    func1 = self._flat_api.getFunctionContaining(
+                        second_call.call.getAddress())
+                    func2 = self._flat_api.getFunctionContaining(
+                        call.call.getAddress())
+                    if func1 != func2:
+                        continue
+
+                    if not self._contains_bad_calls(call, second_call):
+                        gadgets.append(DoubleGadget(call, second_call))
+
+        return gadgets
+
     def summary(self):
         """
         Search for book marks that start with 'rop' and print a summary of the 
@@ -310,6 +342,37 @@ class ArmRop(object):
 
         return True
 
+    def _contains_bad_calls(self, first, second):
+        """
+        Search for bad calls between two controllable jumps.
+
+        :param first: Controllable call that comes first in memory.
+        :type first: ControllableCall
+
+        :param second: Controllable call that comes second in memory.
+        :type second ControllableCall
+
+        :returns: True if bad calls are found, False otherwise.
+        :rtype: bool
+        """
+        branch = ArmInstruction('b.*')
+
+        end_ins = first.call
+
+        previous_ins = self._get_previous_instruction(
+            second.control_instruction)
+
+        while previous_ins.getAddress() > end_ins.getAddress():
+            if 'nop' in str(previous_ins):
+                previous_ins = previous_ins.getPrevious()
+
+            if instruction_matches(previous_ins, [branch]):
+                return True
+
+            previous_ins = self._get_previous_instruction(previous_ins)
+
+        return False
+
 
 class ControllableCall(object):
     """
@@ -319,6 +382,15 @@ class ControllableCall(object):
     def __init__(self, instruction, control_instruction):
         self.call = instruction
         self.control_instruction = control_instruction
+
+    def get_source_register(self):
+        """
+        Get the controlling source register.
+        """
+        try:
+            return str(self.control_instruction.getOpObjects(1)[-1])
+        except:
+            return None
 
     def get_control_item(self):
         """
@@ -450,6 +522,129 @@ class RopGadgets(object):
                 print '-' * line_len
         else:
             print 'No bookmarks with "rop" found.'
+
+
+class DoubleGadget(object):
+    """
+    Class to contain double jump gadget.
+    """
+
+    def __init__(self, first, second, name=None):
+        self.first = first
+        self.second = second
+        self.name = name
+        self.instructions = []
+
+    def __str__(self):
+        return format_double_string.format(
+            self.first.control_instruction.getAddress(),
+            self.first.control_instruction,
+            self.first.call.getAddress(), self.first.control_jump(),
+            self.second.control_instruction.getAddress(),
+            self.second.control_instruction,
+            self.second.call.getAddress(),
+            self.second.control_jump())
+
+    def __len__(self):
+        return len(self.get_instructions())
+
+    def print_instructions(self):
+        """
+        Print instructions in the gadget.
+        """
+        instruction_list = self.get_instructions()
+        for instruction in instruction_list:
+            print '%s : %s' % (instruction.getAddress(), instruction)
+
+    def overwrites_register(self, register):
+        """
+        Determine if a register is overwritten in the gadget.
+
+        :returns True if the register is overwritten, False otherwise.
+        :rtype: bool
+        """
+        instruction_list = self.get_instructions()
+        for instruction in instruction_list:
+            if register_overwritten(instruction, register):
+                return True
+        return False
+
+    def get_instructions(self):
+        """
+        Get a list of instructions between the first instruction in the rop
+        and the call.
+        """
+        if self.instructions:
+            return self.instructions
+
+        # Find the higher call, the action or the control instruction.
+        start_ins = self.first.control_instruction if self.first.control_instruction.getAddress() \
+            < self.first.call.getAddress() else self.first.call
+
+        self.instructions.append(start_ins)
+        curr_ins = start_ins
+        while curr_ins.getAddress() <= self.second.call.getAddress():
+            curr_ins = curr_ins.getNext()
+            self.instructions.append(curr_ins)
+
+        return self.instructions
+
+    def get_action_destination_register(self):
+        """
+        Get the action destination register.
+
+        :returns: Destination register as a list of strings.
+        :rtype: list(str)
+        """
+        dest = []
+        try:
+            dest.append(str(self.first.control_instruction.getOpObjects(0)[0]))
+            dest.append(
+                str(self.second.control_instruction.getOpObjects(0)[0]))
+        except:
+            return []
+        return dest
+
+    def get_action_source_register(self):
+        """
+        Get the action source register.
+
+        :returns: Source registers as a list of strings.
+        :rtype: list(str)
+        """
+        src = []
+        try:
+            src.append(str(self.first.control_instruction.getOpObjects(1)[0]))
+            src.append(str(self.second.control_instruction.getOpObjects(1)[0]))
+        except:
+            return []
+        return src
+
+
+class DoubleGadgets(RopGadgets):
+    """
+    Class to contain double jump gadget.
+    """
+
+    def __init__(self):
+        self.gadgets = []
+        super(DoubleGadgets, self).__init__()
+
+    def pretty_print(self):
+        """
+        Print gadgets in a nice table.
+        """
+        gadgets = []
+        if len(self.gadgets):
+            title = ['1st Jump', 'Address', '2nd Jump', 'Address']
+            for gadget in self.gadgets:
+                gadgets.append([
+                    str(gadget.first.call.getAddress()
+                        ), gadget.first.control_jump(),
+                    str(gadget.second.call.getAddress()), gadget.second.control_jump()])
+            utils.table_pretty_print(title, gadgets)
+
+        print 'Found {} matching gadgets.\n'.format(len(self.gadgets))
 
 
 def instruction_matches(ins, matches):
