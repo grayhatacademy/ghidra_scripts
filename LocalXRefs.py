@@ -105,7 +105,12 @@ def get_selection(current_function, force_address=False):
                 stack = current_function.getStackFrame()
                 stack_size = stack.getFrameSize()
                 stack_variable = stack_size + variable.getOffset()
-                selection = hex(stack_variable)[:-1]
+
+                addr_hex = hex(stack_variable)
+                if addr_hex.endswith('L'):
+                    addr_hex = addr_hex[:-1]
+                selection = self._address_factory.getAddress(addr_hex)
+
                 print '\nXrefs to {}({}) in {}:'.format(selection, 
                                                           is_variable,
                                                           current_function)
