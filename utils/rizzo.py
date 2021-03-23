@@ -346,7 +346,7 @@ class Rizzo(object):
         for matches in signature_matches:
             for curr_func, new_func in matches.iteritems():
                 curr_addr = self._address_factory.getAddress(
-                    hex(curr_func.address)[:-1])
+                    hex(curr_func.address))
                 function = self._flat_api.getFunctionAt(curr_addr)
                 if function and new_func.name not in renamed:
                     renamed.append(new_func.name)
