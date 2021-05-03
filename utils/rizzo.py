@@ -553,7 +553,7 @@ class Rizzo(object):
                     formal.append(operand)
 
                     op_type = curr_ins.getOperandRefType(i)
-                    if op_type.isData():
+                    if op_type and op_type.isData():
                         # Indeterminate return values. Just put a try/except
                         # around it so the getValue AttributeError can be
                         # ignored. Not worth checking for types since those
